@@ -4,12 +4,16 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.7 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.8 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
 
 El botón **Acerca de** muestra la versión y el objetivo de la herramienta.
+
+La casilla **Recordar carpeta** restaura la última carpeta de trabajo al iniciar.
+La preferencia se guarda en `%APPDATA%\AzaleaCore MPQ Studio\settings.json` y se
+puede desactivar en cualquier momento.
 
 ## Flujo gráfico
 

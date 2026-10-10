@@ -33,6 +33,11 @@ from .packer import (
     is_protected_gluexml,
     plan_patch,
 )
+from .settings import (
+    default_settings_path,
+    load_workspace_settings,
+    save_workspace_settings,
+)
 from .workspace import ExportRequest, Workspace, export_files, prepare_workspace
 
 
@@ -103,6 +108,8 @@ class MPQStudioApp:
         self.root.geometry("1180x720")
         self.root.minsize(900, 560)
 
+        self.remember_workspace = tk.BooleanVar(value=True)
+        self.settings_path = default_settings_path()
         self.selected_path = tk.StringVar()
         self.search_text = tk.StringVar()
         self.listfile_text = tk.StringVar(value="No cargado")
@@ -135,6 +142,10 @@ class MPQStudioApp:
 
         self._configure_style()
         self._build_ui()
+        remember, last_workspace = load_workspace_settings(self.settings_path)
+        self.remember_workspace.set(remember)
+        if remember and last_workspace is not None:
+            self._set_workspace(last_workspace, save_preference=False)
         self.refresh_archive_list()
         self._update_actions()
         if self.selected_path.get():
@@ -177,6 +188,13 @@ class MPQStudioApp:
         ttk.Button(
             workspace_bar, text="Seleccionar...", command=self.choose_workspace
         ).pack(side=tk.RIGHT)
+        self.remember_workspace_button = ttk.Checkbutton(
+            workspace_bar,
+            text="Recordar carpeta",
+            variable=self.remember_workspace,
+            command=self._remember_workspace_changed,
+        )
+        self.remember_workspace_button.pack(side=tk.RIGHT, padx=(0, 12))
 
         notebook = ttk.Notebook(outer)
         notebook.pack(fill=tk.BOTH, expand=True)
@@ -437,6 +455,9 @@ class MPQStudioApp:
         selected = filedialog.askdirectory(parent=self.root, title="Carpeta de trabajo")
         if not selected:
             return
+        self._set_workspace(selected)
+
+    def _set_workspace(self, selected: Path | str, *, save_preference: bool = True) -> None:
         try:
             self.workspace = prepare_workspace(selected)
         except OSError as exc:
@@ -447,6 +468,30 @@ class MPQStudioApp:
         self.import_status.set("Carpetas exportar y empaquetar preparadas.")
         self.refresh_package_tree()
         self._update_actions()
+        if save_preference:
+            self._save_workspace_preference()
+
+    def _remember_workspace_changed(self) -> None:
+        self._save_workspace_preference()
+
+    def _save_workspace_preference(self) -> None:
+        try:
+            save_workspace_settings(
+                self.settings_path,
+                remember=self.remember_workspace.get(),
+                workspace=(
+                    self.workspace.root
+                    if self.remember_workspace.get() and self.workspace is not None
+                    else None
+                ),
+            )
+        except OSError as exc:
+            messagebox.showwarning(
+                "No se pudo guardar la preferencia",
+                f"Studio mantiene la carpeta seleccionada durante esta sesión, "
+                f"pero no pudo recordarla:\n{exc}",
+                parent=self.root,
+            )
 
     def refresh_archive_list(self) -> None:
         values = [str(path) for path in discover_mpqs(DEFAULT_DATA_DIR)]

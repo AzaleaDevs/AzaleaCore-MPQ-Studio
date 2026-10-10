@@ -67,7 +67,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 45. Incorporar menú contextual y atajos de teclado.
 - [ ] 46. Añadir barra de progreso y cancelación para operaciones largas.
 - [ ] 47. Mejorar mensajes de error y generar un registro técnico exportable.
-- [ ] 48. Recordar de forma opcional la última carpeta de trabajo.
+- [x] 48. Recordar de forma opcional la última carpeta de trabajo.
 - [x] 49a. Mostrar versión e información del proyecto en “Acerca de”.
 - [ ] 49b. Crear icono de aplicación.
 - [ ] 50. Empaquetar una versión portable para Windows.

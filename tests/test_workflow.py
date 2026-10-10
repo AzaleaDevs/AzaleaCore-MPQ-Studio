@@ -25,6 +25,7 @@ from azaleacore_mpq_studio.packer import (
     is_protected_gluexml,
     plan_patch,
 )
+from azaleacore_mpq_studio.settings import load_workspace_settings, save_workspace_settings
 from azaleacore_mpq_studio.workspace import (
     ExportRequest,
     export_files,
@@ -46,6 +47,19 @@ class PatchPlanningTest(unittest.TestCase):
             self.assertEqual(
                 load_listfile_paths(listfile), ("Interface\\Demo\\Hidden.bin",)
             )
+
+    def test_workspace_preference_can_be_saved_and_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = root / "settings.json"
+            workspace = root / "workspace"
+            workspace.mkdir()
+
+            save_workspace_settings(settings, remember=True, workspace=workspace)
+            self.assertEqual(load_workspace_settings(settings), (True, workspace))
+
+            save_workspace_settings(settings, remember=False, workspace=workspace)
+            self.assertEqual(load_workspace_settings(settings), (False, None))
 
     def test_mpq_flags_are_shown_in_hex_and_plain_language(self) -> None:
         description = describe_mpq_flags(MPQ_FILE_EXISTS | MPQ_FILE_COMPRESS)
