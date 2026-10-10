@@ -88,6 +88,66 @@ def calculate_mpq_sha256(source: Path, internal_path: str) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def format_error_for_clipboard(title: str, message: str) -> str:
+    """Forma un informe breve que se puede pegar en una incidencia o comentario."""
+    return f"AzaleaCore MPQ Studio {__version__}\n{title}\n\n{message}"
+
+
+class CopyableErrorDialog(tk.Toplevel):
+    """Diálogo modal de problema con copia del informe al portapapeles."""
+
+    def __init__(
+        self, parent: tk.Misc, title: str, message: str, *, warning: bool = False
+    ) -> None:
+        super().__init__(parent)
+        self.title(title)
+        self.transient(parent)
+        self.resizable(True, True)
+        self.minsize(520, 260)
+        self.geometry("740x360")
+        self.report = format_error_for_clipboard(title, message)
+        self.copy_status = tk.StringVar(value="")
+
+        body = ttk.Frame(self, padding=14)
+        body.pack(fill=tk.BOTH, expand=True)
+        heading = "Aviso de AzaleaCore MPQ Studio" if warning else "Error de AzaleaCore MPQ Studio"
+        ttk.Label(body, text=heading, style="Title.TLabel").pack(anchor=tk.W, pady=(0, 8))
+
+        details_frame = ttk.Frame(body)
+        details_frame.pack(fill=tk.BOTH, expand=True)
+        details = tk.Text(details_frame, wrap=tk.WORD, height=10, width=84)
+        scrollbar = ttk.Scrollbar(details_frame, orient=tk.VERTICAL, command=details.yview)
+        details.configure(yscrollcommand=scrollbar.set)
+        details.insert("1.0", message)
+        details.configure(state=tk.DISABLED)
+        details.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        footer = ttk.Frame(body)
+        footer.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(footer, textvariable=self.copy_status, style="Muted.TLabel").pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        self.copy_button = ttk.Button(
+            footer, text="Copiar al portapapeles", command=self.copy_report
+        )
+        self.copy_button.pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(footer, text="Cerrar", command=self.destroy).pack(side=tk.RIGHT)
+        self.bind("<Escape>", lambda _event: self.destroy())
+        self.grab_set()
+        self.focus_set()
+
+    def copy_report(self) -> None:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self.report)
+            self.update_idletasks()
+        except tk.TclError:
+            self.copy_status.set("No se pudo acceder al portapapeles.")
+        else:
+            self.copy_status.set("Informe copiado; ya puedes pegarlo.")
+
+
 def discover_mpqs(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
@@ -215,6 +275,9 @@ class MPQStudioApp:
             "Los MPQ de origen se abren en modo de solo lectura.",
             parent=self.root,
         )
+
+    def _show_error(self, title: str, message: str, *, warning: bool = False) -> None:
+        CopyableErrorDialog(self.root, title, message, warning=warning)
 
     def _build_export_tab(self) -> None:
         chooser = ttk.Frame(self.export_tab)
@@ -461,7 +524,7 @@ class MPQStudioApp:
         try:
             self.workspace = prepare_workspace(selected)
         except OSError as exc:
-            messagebox.showerror("No se pudo preparar la carpeta", str(exc), parent=self.root)
+            self._show_error("No se pudo preparar la carpeta", str(exc))
             return
         self.workspace_text.set(str(self.workspace.root))
         self.package_dir_label.configure(text=str(self.workspace.package_dir))
@@ -486,11 +549,11 @@ class MPQStudioApp:
                 ),
             )
         except OSError as exc:
-            messagebox.showwarning(
+            self._show_error(
                 "No se pudo guardar la preferencia",
                 f"Studio mantiene la carpeta seleccionada durante esta sesión, "
                 f"pero no pudo recordarla:\n{exc}",
-                parent=self.root,
+                warning=True,
             )
 
     def refresh_archive_list(self) -> None:
@@ -532,7 +595,7 @@ class MPQStudioApp:
         try:
             paths = load_listfile_paths(filename)
         except (OSError, UnicodeError) as exc:
-            messagebox.showerror("No se pudo leer el listfile", str(exc), parent=self.root)
+            self._show_error("No se pudo leer el listfile", str(exc))
             return
         self.external_listfile = Path(filename)
         self.external_listfile_paths = paths
@@ -558,7 +621,7 @@ class MPQStudioApp:
                 inventory = archive.inventory((*known_paths(), *self.external_listfile_paths))
         except (OSError, MPQError, struct.error) as exc:
             self.export_status.set("No se pudo abrir el archivo.")
-            messagebox.showerror("Error al abrir MPQ", str(exc), parent=self.root)
+            self._show_error("Error al abrir MPQ", str(exc))
             return
         self.current_archive = path
         self.current_files = inventory.files
@@ -676,7 +739,7 @@ class MPQStudioApp:
             digest = calculate_mpq_sha256(self.current_archive, file.path)
         except (OSError, MPQError, struct.error) as exc:
             self.property_sha256.set("No disponible")
-            messagebox.showerror("Error al calcular SHA-256", str(exc), parent=self.root)
+            self._show_error("Error al calcular SHA-256", str(exc))
         else:
             self.property_sha256.set(digest)
         finally:
@@ -744,7 +807,7 @@ class MPQStudioApp:
         try:
             results = export_files(requests, self.workspace, overwrite=overwrite)
         except (OSError, MPQError, ValueError) as exc:
-            messagebox.showerror("Error de extracción", str(exc), parent=self.root)
+            self._show_error("Error de extracción", str(exc))
             return
         messagebox.showinfo(
             "Extracción completada",
@@ -892,7 +955,7 @@ class MPQStudioApp:
         try:
             digest, size = create_and_install_patch(files, self.patch_plan)
         except (OSError, PackagingError, MPQError) as exc:
-            messagebox.showerror("No se pudo crear el parche", str(exc), parent=self.root)
+            self._show_error("No se pudo crear el parche", str(exc))
             return
         messagebox.showinfo(
             "Parche creado y validado",

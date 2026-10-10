@@ -10,6 +10,7 @@ from azaleacore_mpq_studio.app import (
     calculate_mpq_sha256,
     describe_mpq_flags,
     filter_mpq_files,
+    format_error_for_clipboard,
 )
 from azaleacore_mpq_studio.mpq import (
     MPQ_FILE_COMPRESS,
@@ -38,6 +39,12 @@ HIGHLIGHT = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_error_clipboard_report_includes_version_title_and_detail(self) -> None:
+        report = format_error_for_clipboard("MPQ inválido", "Tabla incompleta")
+        self.assertIn("AzaleaCore MPQ Studio", report)
+        self.assertIn("MPQ inválido", report)
+        self.assertIn("Tabla incompleta", report)
+
     def test_external_listfile_paths_are_normalized_and_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             listfile = Path(temporary) / "listfile.txt"

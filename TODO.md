@@ -66,7 +66,8 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 44. Añadir arrastrar y soltar para abrir MPQ y añadir archivos.
 - [ ] 45. Incorporar menú contextual y atajos de teclado.
 - [ ] 46. Añadir barra de progreso y cancelación para operaciones largas.
-- [ ] 47. Mejorar mensajes de error y generar un registro técnico exportable.
+- [x] 47a. Copiar errores y avisos con versión, título y detalle desde el diálogo.
+- [ ] 47b. Generar un registro técnico exportable.
 - [x] 48. Recordar de forma opcional la última carpeta de trabajo.
 - [x] 49a. Mostrar versión e información del proyecto en “Acerca de”.
 - [ ] 49b. Crear icono de aplicación.
