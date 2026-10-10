@@ -248,7 +248,7 @@ Para descargar una versión ya compilada, abre la página de
 [Releases de AzaleaCore MPQ Studio](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
 entra en la versión más reciente y descarga el ZIP portable que aparece en
 **Assets**. También puedes usar la
-[descarga directa de la versión 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore%20MPQ%20Studio%200.16.0%20portable.zip).
+[descarga directa de la versión 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore.MPQ.Studio.0.16.0.portable.zip).
 Descomprímelo y ejecuta `AzaleaCore MPQ Studio.exe` desde la carpeta extraída;
 no hace falta instalar Python. El ZIP de código fuente de GitHub no es el
 portable compilado.
@@ -271,7 +271,7 @@ To download a prebuilt version, open the
 [AzaleaCore MPQ Studio Releases page](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
 open the latest release, and download the portable ZIP listed under **Assets**.
 You can also use the
-[direct download for version 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore%20MPQ%20Studio%200.16.0%20portable.zip).
+[direct download for version 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore.MPQ.Studio.0.16.0.portable.zip).
 Extract the ZIP and run `AzaleaCore MPQ Studio.exe` from the extracted folder;
 Python does not need to be installed. GitHub's source-code ZIP is not the
 prebuilt portable app.
