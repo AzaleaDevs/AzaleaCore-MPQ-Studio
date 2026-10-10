@@ -70,7 +70,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 47b. Generar un registro técnico exportable.
 - [x] 48. Recordar de forma opcional la última carpeta de trabajo.
 - [x] 49a. Mostrar versión e información del proyecto en “Acerca de”.
-- [ ] 49b. Crear icono de aplicación.
+- [x] 49b. Crear icono de aplicación.
 - [ ] 50. Empaquetar una versión portable para Windows.
 - [ ] 51. Probar la versión portable en un equipo sin Python instalado.
 - [ ] 52. Preparar manual de usuario y capturas para AzerothCore Labs.

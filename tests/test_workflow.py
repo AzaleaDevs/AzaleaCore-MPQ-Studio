@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import struct
 import unittest
 from pathlib import Path
 
@@ -36,9 +37,17 @@ from azaleacore_mpq_studio.workspace import (
 
 PATCH9 = Path(r"D:\World of Warcraft 3.3.5a\Data\patch-9.MPQ")
 HIGHLIGHT = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
+APP_ICON = Path(__file__).resolve().parents[1] / "assets" / "azaleacore-mpq-studio.ico"
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_application_icon_contains_expected_windows_sizes(self) -> None:
+        icon = APP_ICON.read_bytes()
+        reserved, resource_type, count = struct.unpack_from("<HHH", icon)
+        self.assertEqual((reserved, resource_type, count), (0, 1, 7))
+        dimensions = tuple(icon[6 + index * 16] or 256 for index in range(count))
+        self.assertEqual(dimensions, (16, 24, 32, 48, 64, 128, 256))
+
     def test_error_clipboard_report_includes_version_title_and_detail(self) -> None:
         report = format_error_for_clipboard("MPQ inválido", "Tabla incompleta")
         self.assertIn("AzaleaCore MPQ Studio", report)
