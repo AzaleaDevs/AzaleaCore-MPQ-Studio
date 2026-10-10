@@ -21,7 +21,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 
 ## Próximos pasos esenciales
 
-- [ ] 14. Añadir buscador y filtro instantáneo de rutas dentro del MPQ abierto.
+- [x] 14. Añadir buscador y filtro instantáneo de rutas dentro del MPQ abierto.
 - [ ] 15. Añadir panel de propiedades del archivo seleccionado.
 - [ ] 16. Mostrar ruta completa, tamaños, flags y SHA-256 bajo demanda.
 - [ ] 17. Permitir cargar un `(listfile)` externo desde la interfaz.

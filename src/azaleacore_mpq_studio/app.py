@@ -29,6 +29,14 @@ class QueuedExport:
     file: MPQFile
 
 
+def filter_mpq_files(files: tuple[MPQFile, ...], query: str) -> tuple[MPQFile, ...]:
+    """Filtra por cualquier fragmento de la ruta, sin distinguir mayúsculas."""
+    normalized = query.strip().casefold()
+    if not normalized:
+        return files
+    return tuple(item for item in files if normalized in item.path.casefold())
+
+
 def discover_mpqs(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
@@ -50,6 +58,7 @@ class MPQStudioApp:
         self.root.minsize(900, 560)
 
         self.selected_path = tk.StringVar()
+        self.search_text = tk.StringVar()
         self.workspace_text = tk.StringVar(value="No seleccionada")
         self.export_status = tk.StringVar(value="Selecciona un archivo MPQ.")
         self.import_status = tk.StringVar(value="Selecciona una carpeta de trabajo.")
@@ -60,6 +69,8 @@ class MPQStudioApp:
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
         self.current_archive: Path | None = None
+        self.current_files: tuple[MPQFile, ...] = ()
+        self.current_archive_summary = ""
         self.archive_items: dict[str, MPQFile] = {}
         self.export_queue: dict[str, QueuedExport] = {}
         self.package_items: dict[str, Path] = {}
@@ -130,6 +141,17 @@ class MPQStudioApp:
         ttk.Button(
             chooser, text="Actualizar", command=self.refresh_archive_list
         ).pack(side=tk.LEFT)
+
+        search = ttk.Frame(self.export_tab)
+        search.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(search, text="Buscar:").pack(side=tk.LEFT, padx=(0, 6))
+        self.search_entry = ttk.Entry(search, textvariable=self.search_text)
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        ttk.Button(search, text="Limpiar", command=lambda: self.search_text.set("")).pack(
+            side=tk.LEFT
+        )
+        self.search_text.trace_add("write", lambda *_args: self._apply_archive_filter())
+        self.root.bind("<Control-f>", self._focus_search)
 
         panes = ttk.Panedwindow(self.export_tab, orient=tk.HORIZONTAL)
         panes.pack(fill=tk.BOTH, expand=True)
@@ -317,8 +339,8 @@ class MPQStudioApp:
             messagebox.showerror("Error al abrir MPQ", str(exc), parent=self.root)
             return
         self.current_archive = path
-        self._populate_archive_tree(inventory.files)
-        self.export_status.set(
+        self.current_files = inventory.files
+        self.current_archive_summary = (
             f"{path.name}: {len(inventory.files)} identificados de "
             f"{inventory.active_entries} entradas · Solo lectura"
             + (
@@ -327,6 +349,26 @@ class MPQStudioApp:
                 else ""
             )
         )
+        self._apply_archive_filter()
+
+    def _apply_archive_filter(self) -> None:
+        if not hasattr(self, "archive_tree"):
+            return
+        visible = filter_mpq_files(self.current_files, self.search_text.get())
+        self._clear_tree(self.archive_tree)
+        self.archive_items.clear()
+        self._populate_archive_tree(visible)
+        if self.search_text.get().strip():
+            self.export_status.set(
+                f"{self.current_archive_summary} · {len(visible)} resultado(s) visibles"
+            )
+        else:
+            self.export_status.set(self.current_archive_summary or "Selecciona un archivo MPQ.")
+
+    def _focus_search(self, _event: tk.Event) -> str:
+        self.search_entry.focus_set()
+        self.search_entry.selection_range(0, tk.END)
+        return "break"
 
     def _populate_archive_tree(self, files: tuple[MPQFile, ...]) -> None:
         folders: dict[tuple[str, ...], str] = {}

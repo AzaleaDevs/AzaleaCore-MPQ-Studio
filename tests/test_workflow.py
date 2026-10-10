@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from azaleacore_mpq_studio.app import filter_mpq_files
+from azaleacore_mpq_studio.mpq import MPQFile
+
 from azaleacore_mpq_studio.mpq import MPQArchive
 from azaleacore_mpq_studio.packer import (
     PackagingError,
@@ -33,6 +36,16 @@ class PatchPlanningTest(unittest.TestCase):
         self.assertFalse(
             is_protected_gluexml("Interface\\WorldMap\\Azeroth\\Map.blp")
         )
+
+    def test_path_filter_is_instant_style_and_case_insensitive(self) -> None:
+        files = (
+            MPQFile("Interface\\GlueXML\\GlueStrings.lua", 10, 10, 0),
+            MPQFile("Interface\\WorldMap\\Azeroth\\Map.blp", 20, 20, 0),
+        )
+        self.assertEqual(filter_mpq_files(files, "gluestrings"), files[:1])
+        self.assertEqual(filter_mpq_files(files, "WORLDMAP"), files[1:])
+        self.assertEqual(filter_mpq_files(files, "   "), files)
+        self.assertEqual(filter_mpq_files(files, "missing"), ())
 
     def test_empty_directory_starts_at_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
