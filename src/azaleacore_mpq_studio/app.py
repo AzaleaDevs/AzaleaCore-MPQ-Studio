@@ -65,6 +65,9 @@ class MPQStudioApp:
         self.destination_text = tk.StringVar(value="No seleccionado")
         self.plan_text = tk.StringVar(value="Selecciona el directorio de destino.")
         self.glue_warning = tk.StringVar()
+        self.property_name = tk.StringVar(value="Sin selección")
+        self.property_type = tk.StringVar(value="—")
+        self.property_source = tk.StringVar(value="—")
 
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
@@ -170,6 +173,7 @@ class MPQStudioApp:
         self.archive_tree.column("type", width=75, anchor=tk.CENTER)
         self.archive_tree.column("size", width=90, anchor=tk.E)
         self.archive_tree.bind("<Double-1>", self._archive_double_click)
+        self.archive_tree.bind("<<TreeviewSelect>>", self._update_properties)
 
         ttk.Button(middle, text=">>", width=6, command=self.queue_selected).pack(
             pady=(150, 8)
@@ -185,6 +189,15 @@ class MPQStudioApp:
         self.export_tree.column("size", width=90, anchor=tk.E)
         self.export_tree.bind("<Double-1>", lambda _event: self.unqueue_selected())
 
+        properties = ttk.LabelFrame(
+            self.export_tab, text="Propiedades de la selección", padding=8
+        )
+        properties.pack(fill=tk.X, pady=(8, 0))
+        self._property_row(properties, 0, "Nombre", self.property_name)
+        self._property_row(properties, 1, "Tipo", self.property_type)
+        self._property_row(properties, 2, "MPQ de origen", self.property_source)
+        properties.columnconfigure(1, weight=1)
+
         footer = ttk.Frame(self.export_tab)
         footer.pack(fill=tk.X, pady=(8, 0))
         ttk.Label(footer, textvariable=self.export_status, style="Muted.TLabel").pack(
@@ -194,6 +207,17 @@ class MPQStudioApp:
             footer, text="Extraer selección", command=self.extract_queue
         )
         self.extract_button.pack(side=tk.RIGHT)
+
+    @staticmethod
+    def _property_row(
+        parent: ttk.LabelFrame, row: int, title: str, variable: tk.StringVar
+    ) -> None:
+        ttk.Label(parent, text=f"{title}:", style="Section.TLabel").grid(
+            row=row, column=0, sticky=tk.W, padx=(0, 10), pady=1
+        )
+        ttk.Label(parent, textvariable=variable).grid(
+            row=row, column=1, sticky=tk.W, pady=1
+        )
 
     def _build_import_tab(self) -> None:
         source_bar = ttk.Frame(self.import_tab)
@@ -357,6 +381,7 @@ class MPQStudioApp:
         visible = filter_mpq_files(self.current_files, self.search_text.get())
         self._clear_tree(self.archive_tree)
         self.archive_items.clear()
+        self._clear_properties()
         self._populate_archive_tree(visible)
         if self.search_text.get().strip():
             self.export_status.set(
@@ -399,6 +424,31 @@ class MPQStudioApp:
             self.queue_selected()
         elif self.archive_tree.get_children(item):
             self.archive_tree.item(item, open=not bool(self.archive_tree.item(item, "open")))
+
+    def _update_properties(self, _event: tk.Event | None = None) -> None:
+        selection = self.archive_tree.selection()
+        if len(selection) != 1:
+            self._clear_properties()
+            return
+        node = selection[0]
+        file = self.archive_items.get(node)
+        if file is not None:
+            self.property_name.set(Path(file.path).name)
+            self.property_type.set(Path(file.path).suffix.upper().lstrip(".") or "Archivo")
+            self.property_source.set(
+                str(self.current_archive) if self.current_archive is not None else "—"
+            )
+            return
+        self.property_name.set(self.archive_tree.item(node, "text"))
+        self.property_type.set("Carpeta")
+        self.property_source.set(
+            str(self.current_archive) if self.current_archive is not None else "—"
+        )
+
+    def _clear_properties(self) -> None:
+        self.property_name.set("Sin selección")
+        self.property_type.set("—")
+        self.property_source.set("—")
 
     def queue_selected(self) -> None:
         if self.current_archive is None:
