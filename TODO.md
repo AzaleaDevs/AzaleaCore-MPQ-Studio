@@ -24,7 +24,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [x] 14. Añadir buscador y filtro instantáneo de rutas dentro del MPQ abierto.
 - [x] 15. Añadir panel de propiedades del archivo seleccionado.
 - [x] 16. Mostrar ruta completa, tamaños, flags y SHA-256 bajo demanda.
-- [ ] 17. Permitir cargar un `(listfile)` externo desde la interfaz.
+- [x] 17. Permitir cargar un `(listfile)` externo desde la interfaz.
 - [ ] 18. Crear un catálogo editable de rutas conocidas.
 - [ ] 19. Guardar y reutilizar catálogos sin modificar los MPQ.
 - [ ] 20. Resolver el proveedor efectivo de una ruta recorriendo una carpeta `Data`.

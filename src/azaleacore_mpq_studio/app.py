@@ -23,6 +23,7 @@ from .mpq import (
     MPQArchive,
     MPQError,
     MPQFile,
+    load_listfile_paths,
 )
 from .packer import (
     PackagingError,
@@ -103,6 +104,7 @@ class MPQStudioApp:
 
         self.selected_path = tk.StringVar()
         self.search_text = tk.StringVar()
+        self.listfile_text = tk.StringVar(value="No cargado")
         self.workspace_text = tk.StringVar(value="No seleccionada")
         self.export_status = tk.StringVar(value="Selecciona un archivo MPQ.")
         self.import_status = tk.StringVar(value="Selecciona una carpeta de trabajo.")
@@ -123,6 +125,8 @@ class MPQStudioApp:
         self.current_archive: Path | None = None
         self.current_files: tuple[MPQFile, ...] = ()
         self.current_archive_summary = ""
+        self.external_listfile: Path | None = None
+        self.external_listfile_paths: tuple[str, ...] = ()
         self.archive_items: dict[str, MPQFile] = {}
         self.export_queue: dict[str, QueuedExport] = {}
         self.package_items: dict[str, Path] = {}
@@ -148,11 +152,11 @@ class MPQStudioApp:
         style.configure("Treeview.Heading", font=("Segoe UI Semibold", 9))
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self.root, padding=16)
+        outer = ttk.Frame(self.root, padding=(16, 10))
         outer.pack(fill=tk.BOTH, expand=True)
 
         header = ttk.Frame(outer)
-        header.pack(fill=tk.X, pady=(0, 10))
+        header.pack(fill=tk.X, pady=(0, 6))
         ttk.Label(header, text="AzaleaCore MPQ Studio", style="Title.TLabel").pack(
             side=tk.LEFT
         )
@@ -171,8 +175,8 @@ class MPQStudioApp:
 
         notebook = ttk.Notebook(outer)
         notebook.pack(fill=tk.BOTH, expand=True)
-        self.export_tab = ttk.Frame(notebook, padding=10)
-        self.import_tab = ttk.Frame(notebook, padding=10)
+        self.export_tab = ttk.Frame(notebook, padding=6)
+        self.import_tab = ttk.Frame(notebook, padding=6)
         notebook.add(self.export_tab, text="EXPORTAR")
         notebook.add(self.import_tab, text="IMPORTAR")
         self._build_export_tab()
@@ -193,6 +197,20 @@ class MPQStudioApp:
         ttk.Button(
             chooser, text="Actualizar", command=self.refresh_archive_list
         ).pack(side=tk.LEFT)
+
+        listfile_bar = ttk.Frame(self.export_tab)
+        listfile_bar.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(listfile_bar, text="Listfile externo:").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(
+            listfile_bar, textvariable=self.listfile_text, style="Muted.TLabel"
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(
+            listfile_bar, text="Cargar...", command=self.browse_listfile
+        ).pack(side=tk.RIGHT, padx=(6, 0))
+        self.clear_listfile_button = ttk.Button(
+            listfile_bar, text="Quitar", command=self.clear_listfile, state=tk.DISABLED
+        )
+        self.clear_listfile_button.pack(side=tk.RIGHT)
 
         search = ttk.Frame(self.export_tab)
         search.pack(fill=tk.X, pady=(0, 8))
@@ -439,13 +457,44 @@ class MPQStudioApp:
             self.selected_path.set(filename)
             self.open_selected()
 
+    def browse_listfile(self) -> None:
+        filename = filedialog.askopenfilename(
+            parent=self.root,
+            title="Seleccionar listfile externo",
+            filetypes=(
+                ("Listfile o texto", "(listfile) *.txt *.lst"),
+                ("Todos los archivos", "*.*"),
+            ),
+        )
+        if not filename:
+            return
+        try:
+            paths = load_listfile_paths(filename)
+        except (OSError, UnicodeError) as exc:
+            messagebox.showerror("No se pudo leer el listfile", str(exc), parent=self.root)
+            return
+        self.external_listfile = Path(filename)
+        self.external_listfile_paths = paths
+        self.listfile_text.set(f"{self.external_listfile.name} · {len(paths)} rutas")
+        self.clear_listfile_button.configure(state=tk.NORMAL)
+        if self.selected_path.get():
+            self.open_selected()
+
+    def clear_listfile(self) -> None:
+        self.external_listfile = None
+        self.external_listfile_paths = ()
+        self.listfile_text.set("No cargado")
+        self.clear_listfile_button.configure(state=tk.DISABLED)
+        if self.selected_path.get():
+            self.open_selected()
+
     def open_selected(self) -> None:
         path = Path(self.selected_path.get())
         self._clear_tree(self.archive_tree)
         self.archive_items.clear()
         try:
             with MPQArchive(path) as archive:
-                inventory = archive.inventory(known_paths())
+                inventory = archive.inventory((*known_paths(), *self.external_listfile_paths))
         except (OSError, MPQError, struct.error) as exc:
             self.export_status.set("No se pudo abrir el archivo.")
             messagebox.showerror("Error al abrir MPQ", str(exc), parent=self.root)
@@ -455,6 +504,11 @@ class MPQStudioApp:
         self.current_archive_summary = (
             f"{path.name}: {len(inventory.files)} identificados de "
             f"{inventory.active_entries} entradas · Solo lectura"
+            + (
+                f" · listfile externo: {len(self.external_listfile_paths)} rutas"
+                if self.external_listfile is not None
+                else ""
+            )
             + (
                 f" · {inventory.unknown_entries} todavía sin nombre"
                 if inventory.unknown_entries

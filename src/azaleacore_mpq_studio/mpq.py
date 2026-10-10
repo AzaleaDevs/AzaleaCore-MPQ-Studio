@@ -45,6 +45,29 @@ class MPQInventory:
     has_listfile: bool
 
 
+def load_listfile_paths(path: Path | str) -> tuple[str, ...]:
+    """Lee rutas de un listfile externo y las normaliza para su búsqueda MPQ."""
+    source = Path(path)
+    payload = source.read_bytes()
+    if payload.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = payload.decode("utf-16")
+    else:
+        try:
+            text = payload.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = payload.decode("cp1252")
+            except UnicodeDecodeError:
+                text = payload.decode("latin-1")
+
+    paths: dict[str, str] = {}
+    for line in text.splitlines():
+        internal_path = line.strip().strip("\x00").replace("/", "\\")
+        if internal_path:
+            paths.setdefault(internal_path.casefold(), internal_path)
+    return tuple(paths.values())
+
+
 def _build_crypt_table() -> tuple[int, ...]:
     table = [0] * 0x500
     seed = 0x00100001

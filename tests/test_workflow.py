@@ -11,11 +11,16 @@ from azaleacore_mpq_studio.app import (
     describe_mpq_flags,
     filter_mpq_files,
 )
-from azaleacore_mpq_studio.mpq import MPQ_FILE_COMPRESS, MPQ_FILE_EXISTS, MPQFile
-
-from azaleacore_mpq_studio.mpq import MPQArchive
+from azaleacore_mpq_studio.mpq import (
+    MPQ_FILE_COMPRESS,
+    MPQ_FILE_EXISTS,
+    MPQArchive,
+    MPQFile,
+    load_listfile_paths,
+)
 from azaleacore_mpq_studio.packer import (
     PackagingError,
+    build_mpq,
     create_and_install_patch,
     is_protected_gluexml,
     plan_patch,
@@ -32,6 +37,16 @@ HIGHLIGHT = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_external_listfile_paths_are_normalized_and_deduplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            listfile = Path(temporary) / "listfile.txt"
+            listfile.write_bytes(
+                b"Interface/Demo/Hidden.bin\r\ninterface\\demo\\hidden.bin\n\n"
+            )
+            self.assertEqual(
+                load_listfile_paths(listfile), ("Interface\\Demo\\Hidden.bin",)
+            )
+
     def test_mpq_flags_are_shown_in_hex_and_plain_language(self) -> None:
         description = describe_mpq_flags(MPQ_FILE_EXISTS | MPQ_FILE_COMPRESS)
         self.assertEqual(description, "0x80000200 · EXISTE | COMPRIMIDO")
@@ -84,6 +99,21 @@ class PatchPlanningTest(unittest.TestCase):
 
 
 class PackagingRoundTripTest(unittest.TestCase):
+    def test_external_listfile_discovers_unlisted_mpq_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_path = root / "unlisted.MPQ"
+            internal_path = "Interface\\Demo\\Hidden.bin"
+            build_mpq([(internal_path, b"hidden resource")], archive_path)
+            listfile = root / "listfile.txt"
+            listfile.write_text(internal_path + "\n", encoding="utf-8")
+
+            with MPQArchive(archive_path) as archive:
+                inventory = archive.inventory(load_listfile_paths(listfile))
+
+            self.assertEqual([item.path for item in inventory.files], [internal_path])
+            self.assertEqual(inventory.unknown_entries, 0)
+
     def test_new_mpq_reopens_and_preserves_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
