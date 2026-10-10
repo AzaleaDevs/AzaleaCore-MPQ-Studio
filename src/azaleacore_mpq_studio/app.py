@@ -268,12 +268,22 @@ class MPQStudioApp:
 
         notebook = ttk.Notebook(outer)
         notebook.pack(fill=tk.BOTH, expand=True)
+        self.notebook = notebook
         self.export_tab = ttk.Frame(notebook, padding=6)
         self.import_tab = ttk.Frame(notebook, padding=6)
         notebook.add(self.export_tab, text="EXPORTAR")
         notebook.add(self.import_tab, text="IMPORTAR")
         self._build_export_tab()
         self._build_import_tab()
+        self._bind_shortcuts()
+
+    def _bind_shortcuts(self) -> None:
+        """Atajos globales de la ventana; los menús de contexto complementan la UI."""
+        self.root.bind_all("<Control-o>", self._shortcut_open_archive)
+        self.root.bind_all("<Control-f>", self._focus_search)
+        self.root.bind_all("<Control-e>", self._shortcut_extract)
+        self.root.bind_all("<F5>", self._shortcut_refresh)
+        self.root.bind_all("<Delete>", self._shortcut_remove_from_queue)
 
     def show_about(self) -> None:
         messagebox.showinfo(
@@ -328,8 +338,6 @@ class MPQStudioApp:
             side=tk.LEFT
         )
         self.search_text.trace_add("write", lambda *_args: self._apply_archive_filter())
-        self.root.bind("<Control-f>", self._focus_search)
-
         panes = ttk.Panedwindow(self.export_tab, orient=tk.HORIZONTAL)
         panes.pack(fill=tk.BOTH, expand=True)
         left = ttk.LabelFrame(panes, text="Contenido del MPQ", padding=6)
@@ -348,6 +356,18 @@ class MPQStudioApp:
         self.archive_tree.column("size", width=90, anchor=tk.E)
         self.archive_tree.bind("<Double-1>", self._archive_double_click)
         self.archive_tree.bind("<<TreeviewSelect>>", self._update_properties)
+        self.archive_tree.bind("<Return>", self._shortcut_queue_archive)
+        self.archive_menu = tk.Menu(self.root, tearoff=False)
+        self.archive_menu.add_command(
+            label="Añadir selección a extracción", command=self.queue_selected
+        )
+        self.archive_menu.add_command(
+            label="Calcular SHA-256", command=self._calculate_selected_sha256
+        )
+        self.archive_menu.add_command(
+            label="Copiar ruta interna", command=self._copy_selected_internal_path
+        )
+        self._bind_context_menu(self.archive_tree, self.archive_menu)
 
         ttk.Button(middle, text=">>", width=6, command=self.queue_selected).pack(
             pady=(150, 8)
@@ -362,6 +382,15 @@ class MPQStudioApp:
         self.export_tree.column("source", width=110)
         self.export_tree.column("size", width=90, anchor=tk.E)
         self.export_tree.bind("<Double-1>", lambda _event: self.unqueue_selected())
+        self.export_tree.bind("<Return>", self._shortcut_remove_export)
+        self.export_menu = tk.Menu(self.root, tearoff=False)
+        self.export_menu.add_command(
+            label="Quitar selección de la pila", command=self.unqueue_selected
+        )
+        self.export_menu.add_command(
+            label="Vaciar pila", command=self._clear_export_queue
+        )
+        self._bind_context_menu(self.export_tree, self.export_menu)
 
         properties = ttk.LabelFrame(
             self.export_tab, text="Propiedades de la selección", padding=8
@@ -455,6 +484,15 @@ class MPQStudioApp:
         self.package_tree.column("type", width=75, anchor=tk.CENTER)
         self.package_tree.column("size", width=90, anchor=tk.E)
         self.package_tree.bind("<Double-1>", self._package_double_click)
+        self.package_tree.bind("<Return>", self._shortcut_queue_package)
+        self.package_menu = tk.Menu(self.root, tearoff=False)
+        self.package_menu.add_command(
+            label="Añadir selección al MPQ", command=self.queue_package_selected
+        )
+        self.package_menu.add_command(
+            label="Añadir todos los archivos", command=self.queue_package_all
+        )
+        self._bind_context_menu(self.package_tree, self.package_menu)
 
         ttk.Button(middle, text=">>", width=7, command=self.queue_package_selected).pack(
             pady=(110, 8)
@@ -472,6 +510,15 @@ class MPQStudioApp:
         self.package_queue_tree.bind(
             "<Double-1>", lambda _event: self.unqueue_package()
         )
+        self.package_queue_tree.bind("<Return>", self._shortcut_remove_package)
+        self.package_queue_menu = tk.Menu(self.root, tearoff=False)
+        self.package_queue_menu.add_command(
+            label="Quitar selección de la cola", command=self.unqueue_package
+        )
+        self.package_queue_menu.add_command(
+            label="Vaciar cola", command=self._clear_package_queue
+        )
+        self._bind_context_menu(self.package_queue_tree, self.package_queue_menu)
 
         ttk.Label(
             self.import_tab,
@@ -677,6 +724,92 @@ class MPQStudioApp:
         self.search_entry.selection_range(0, tk.END)
         return "break"
 
+    def _shortcut_open_archive(self, _event: tk.Event) -> str:
+        self.browse_archive()
+        return "break"
+
+    def _shortcut_extract(self, _event: tk.Event) -> str:
+        self.extract_queue()
+        return "break"
+
+    def _shortcut_refresh(self, _event: tk.Event) -> str:
+        if self.notebook.select() == str(self.import_tab):
+            self.refresh_package_tree()
+        else:
+            self.refresh_archive_list()
+            if self.selected_path.get():
+                self.open_selected()
+        return "break"
+
+    def _shortcut_remove_from_queue(self, _event: tk.Event) -> str | None:
+        focused = self.root.focus_get()
+        if focused == self.export_tree:
+            self.unqueue_selected()
+            return "break"
+        if focused == self.package_queue_tree:
+            self.unqueue_package()
+            return "break"
+        return None
+
+    def _shortcut_queue_archive(self, _event: tk.Event) -> str:
+        self.queue_selected()
+        return "break"
+
+    def _shortcut_remove_export(self, _event: tk.Event) -> str:
+        self.unqueue_selected()
+        return "break"
+
+    def _shortcut_queue_package(self, _event: tk.Event) -> str:
+        self.queue_package_selected()
+        return "break"
+
+    def _shortcut_remove_package(self, _event: tk.Event) -> str:
+        self.unqueue_package()
+        return "break"
+
+    def _bind_context_menu(self, tree: ttk.Treeview, menu: tk.Menu) -> None:
+        def show_menu(event: tk.Event) -> str:
+            row = tree.identify_row(event.y)
+            if row:
+                if row not in tree.selection():
+                    tree.selection_set(row)
+                tree.focus(row)
+            else:
+                return "break"
+            if menu is self.archive_menu:
+                is_file = row in self.archive_items
+                menu.entryconfigure(1, state=tk.NORMAL if is_file else tk.DISABLED)
+                menu.entryconfigure(2, state=tk.NORMAL if is_file else tk.DISABLED)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+            return "break"
+
+        tree.bind("<Button-3>", show_menu)
+
+    def _copy_selected_internal_path(self) -> None:
+        selection = self.archive_tree.selection()
+        if len(selection) != 1:
+            return
+        file = self.archive_items.get(selection[0])
+        if file is None:
+            return
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(file.path)
+            self.export_status.set("Ruta interna copiada al portapapeles.")
+        except tk.TclError:
+            self._show_error("No se pudo copiar la ruta", "Windows no permitió acceder al portapapeles.")
+
+    def _clear_export_queue(self) -> None:
+        self.export_queue.clear()
+        self._refresh_export_queue()
+
+    def _clear_package_queue(self) -> None:
+        self.package_queue.clear()
+        self._refresh_package_queue()
+
     def _populate_archive_tree(self, files: tuple[MPQFile, ...]) -> None:
         folders: dict[tuple[str, ...], str] = {}
         for item in files:
@@ -706,6 +839,14 @@ class MPQStudioApp:
             self.queue_selected()
         elif self.archive_tree.get_children(item):
             self.archive_tree.item(item, open=not bool(self.archive_tree.item(item, "open")))
+
+    def _archive_descendant_files(self, node: str) -> list[str]:
+        descendants: list[str] = []
+        for child in self.archive_tree.get_children(node):
+            if child in self.archive_items:
+                descendants.append(child)
+            descendants.extend(self._archive_descendant_files(child))
+        return descendants
 
     def _update_properties(self, _event: tk.Event | None = None) -> None:
         selection = self.archive_tree.selection()
@@ -776,7 +917,10 @@ class MPQStudioApp:
     def queue_selected(self) -> None:
         if self.current_archive is None:
             return
-        for node in self.archive_tree.selection():
+        nodes = list(self.archive_tree.selection())
+        for node in tuple(nodes):
+            nodes.extend(self._archive_descendant_files(node))
+        for node in nodes:
             item = self.archive_items.get(node)
             if item is not None:
                 self.export_queue[item.path.casefold()] = QueuedExport(self.current_archive, item)

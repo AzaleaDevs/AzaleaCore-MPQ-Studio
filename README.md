@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.12 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.13 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
@@ -38,6 +38,13 @@ se conserva el modo de parche mínimo.
 
 En la pestaña EXPORTAR, el campo **Buscar** filtra instantáneamente por cualquier
 fragmento de la ruta interna. `Ctrl+F` lleva el foco al buscador.
+
+Los árboles de archivos tienen menú contextual (botón derecho) para añadir
+archivos o carpetas a las colas, quitar elementos, copiar la ruta interna y
+vaciar una cola. Atajos: `Ctrl+O` abre un MPQ, `Ctrl+F` enfoca el buscador,
+`Ctrl+E` extrae la cola, `F5` actualiza la pestaña activa y `Supr` quita la
+selección cuando el foco está en una cola. `Enter` añade o quita elementos según
+el árbol activo.
 
 En **EXPORTAR**, se puede cargar un listfile externo de texto. Studio combina
 esas rutas con las rutas conocidas y con el `(listfile)` interno del MPQ; cada

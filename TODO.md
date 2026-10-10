@@ -64,7 +64,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 ## Experiencia de usuario y distribución
 
 - [ ] 44. Añadir arrastrar y soltar para abrir MPQ y añadir archivos.
-- [ ] 45. Incorporar menú contextual y atajos de teclado.
+- [x] 45. Incorporar menú contextual y atajos de teclado.
 - [ ] 46. Añadir barra de progreso y cancelación para operaciones largas.
 - [x] 47a. Copiar errores y avisos con versión, título y detalle desde el diálogo.
 - [ ] 47b. Generar un registro técnico exportable.
