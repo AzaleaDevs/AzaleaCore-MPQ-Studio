@@ -1,4 +1,4 @@
-AzaleaCore MPQ Studio 0.14.0 - version portable
+AzaleaCore MPQ Studio 0.15.0 - version portable
 
 1. Extrae el ZIP completo en una carpeta normal.
 2. Abre la carpeta "AzaleaCore MPQ Studio".

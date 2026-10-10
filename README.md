@@ -4,10 +4,11 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.14 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.15 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
-rutas conservadas y creación validada de parches mínimos. La aplicación nunca
-edita un MPQ existente.
+rutas conservadas y creación validada de parches mínimos. La interfaz puede
+cambiar entre español e inglés con el botón del encabezado y recuerda la
+preferencia. La aplicación nunca edita un MPQ existente.
 
 El botón **Acerca de** muestra la versión y el objetivo de la herramienta.
 
@@ -70,7 +71,132 @@ cliente original rechaza esos cambios como interfaz de inicio dañada.
 - La aplicación nunca sobrescribe un MPQ del cliente por defecto.
 - Todo MPQ generado se vuelve a abrir y validar.
 - Las operaciones importantes producen un registro y un manifiesto reproducible.
-- La interfaz y la documentación estarán disponibles en español.
+- La interfaz y la documentación están disponibles en español e inglés.
+
+## Tutorial de uso (Español)
+
+### 1. Iniciar Studio y elegir el idioma
+
+Abre **AzaleaCore MPQ Studio.exe** desde la carpeta portable, o inicia el
+programa desde el código fuente siguiendo las instrucciones de más abajo. El
+botón **English**/**Español** del encabezado cambia el idioma de la interfaz;
+la preferencia se conserva para la próxima ejecución. Los nombres de archivos y
+las rutas internas se muestran tal como están almacenados y no se traducen.
+
+### 2. Preparar una carpeta de trabajo
+
+En la pestaña **EXPORTAR**, selecciona una carpeta de laboratorio como carpeta
+de trabajo. Studio crea dentro las carpetas `exportar` y `empaquetar`. Trabaja
+con copias y no uses la carpeta de instalación del juego como carpeta de
+trabajo.
+
+### 3. Abrir e inspeccionar un MPQ
+
+Pulsa **Abrir MPQ** (o `Ctrl+O`) y selecciona un archivo `.MPQ`, por ejemplo
+uno de la carpeta `Data` del cliente. El panel izquierdo presenta las rutas que
+Studio pudo identificar. Expande los triángulos para recorrer carpetas; usa
+**Buscar** o `Ctrl+F` para filtrar por un fragmento del nombre o de la ruta.
+Si hace falta, carga un listfile de texto: sus rutas se contrastan con el MPQ
+antes de incluirlas en la vista. Seleccionar una entrada muestra sus propiedades
+en el panel inferior.
+
+### 4. Preparar y extraer archivos
+
+En el árbol del MPQ, haz doble clic en un archivo o selecciónalo y pulsa `>>`.
+Para retirar una entrada de la pila, vuelve a hacer doble clic sobre ella o
+selecciónala en la pila y pulsa `<<`. El botón **Todo >>** añade el contenido
+visible al lote. Pulsa **Extraer** (`Ctrl+E`) y elige `exportar` como destino.
+La estructura de carpetas interna se conserva. Studio crea además un manifiesto
+con información y hashes de los archivos exportados.
+
+### 5. Preparar un parche nuevo
+
+Edita fuera de Studio únicamente copias de los archivos que quieras incluir y
+colócalas bajo `empaquetar`, conservando su ruta relativa. En la pestaña
+**IMPORTAR**, actualiza la vista y selecciona los archivos o carpetas deseados;
+usa **Todo >>** sólo si de verdad quieres incluir todo lo que hay allí. Revisa
+la lista del MPQ nuevo. La casilla para añadir `(listfile)` es opcional y está
+desactivada por defecto.
+
+### 6. Crear e instalar el MPQ
+
+Elige como destino una carpeta de instalación de prueba o una carpeta aparte.
+Studio propone el siguiente nombre de parche disponible y no sobrescribe los
+existentes. Comprueba el aviso y la ruta propuesta antes de confirmar. El
+programa crea un MPQ nuevo, lo vuelve a abrir y valida su contenido contra los
+archivos de entrada; conserva un registro y un manifiesto del resultado. Para
+probar un parche de juego, instala primero en una copia del cliente y verifica
+que el cliente lo carga. No uses este procedimiento para alterar los MPQ
+originales.
+
+### 7. Atajos, avisos y ayuda
+
+`Ctrl+O` abre un MPQ, `Ctrl+F` enfoca la búsqueda, `Ctrl+E` extrae la pila,
+`F5` actualiza la pestaña activa y `Supr` quita la selección de una cola. El
+menú contextual aparece con el botón derecho. Si una operación muestra un
+error, el diálogo permite copiar el detalle para compartirlo en una incidencia.
+Los avisos sobre `Interface\\GlueXML` son intencionados: el cliente 3.3.5a
+probado rechaza estos archivos de interfaz de login personalizados.
+
+## User guide (English)
+
+### 1. Start Studio and choose a language
+
+Launch **AzaleaCore MPQ Studio.exe** from the portable folder, or run the source
+version using the instructions below. The **English**/**Español** header button
+switches the interface language, and the choice is remembered for the next
+run. File names and internal paths remain unchanged because they are stored
+that way in the archive.
+
+### 2. Set up a workspace
+
+In the **EXPORT** tab, choose a lab/workspace folder. Studio creates `exportar`
+and `empaquetar` inside it. Work with copies; do not use the game's installation
+folder as your workspace.
+
+### 3. Open and inspect an MPQ
+
+Click **Open MPQ** (or press `Ctrl+O`) and choose an `.MPQ` file, such as one in
+the client's `Data` folder. The left pane lists paths Studio could identify.
+Expand folders with the disclosure arrows and use **Search** or `Ctrl+F` to
+filter by part of a name or path. If needed, load a text listfile; its paths
+are checked against the MPQ before they are shown. Selecting an entry displays
+its properties in the lower pane.
+
+### 4. Queue and extract files
+
+In the archive tree, double-click a file or select it and click `>>`. To remove
+an entry from the queue, double-click it again or select it in the queue and
+click `<<`. **Todo >>** adds the visible contents to the batch. Click
+**Extract** (`Ctrl+E`) and choose `exportar` as the destination. The internal
+folder structure is preserved. Studio also writes a manifest containing file
+metadata and hashes.
+
+### 5. Prepare a new patch
+
+Edit copies outside Studio and place only the files you want to include under
+`empaquetar`, preserving their relative paths. In **IMPORT**, refresh the view
+and select the desired files or folders; use **Todo >>** only if everything in
+that folder should be included. Review the new MPQ's file list. Adding a
+`(listfile)` is optional and disabled by default.
+
+### 6. Build and install the MPQ
+
+Choose a test installation folder or another separate destination. Studio
+suggests the next available patch filename and will not overwrite an existing
+one. Review the warning and proposed path before confirming. The app creates a
+new MPQ, reopens it, and validates its contents against the input files; it
+also keeps a log and manifest. Test game patches against a copy of the client
+first. Do not use this workflow to alter original MPQs.
+
+### 7. Shortcuts, warnings, and help
+
+`Ctrl+O` opens an MPQ, `Ctrl+F` focuses search, `Ctrl+E` extracts the queue,
+`F5` refreshes the active tab, and `Delete` removes the selection from a queue.
+Right-click an item for its context menu. If an operation fails, the error
+dialog can copy its details for an issue report. Warnings about
+`Interface\\GlueXML` are intentional: the tested 3.3.5a client rejects these
+custom login-interface files.
 
 ## Alcance previsto
 

@@ -13,6 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
 from .catalog import known_paths
+from .i18n import normalize_language, translate_text
 from .mpq import (
     MPQ_FILE_COMPRESS,
     MPQ_FILE_DELETE_MARKER,
@@ -37,7 +38,9 @@ from .packer import (
 )
 from .settings import (
     default_settings_path,
+    load_language_setting,
     load_workspace_settings,
+    save_language_setting,
     save_workspace_settings,
 )
 from .workspace import ExportRequest, Workspace, export_files, prepare_workspace
@@ -102,9 +105,18 @@ class CopyableErrorDialog(tk.Toplevel):
     """Diálogo modal de problema con copia del informe al portapapeles."""
 
     def __init__(
-        self, parent: tk.Misc, title: str, message: str, *, warning: bool = False
+        self,
+        parent: tk.Misc,
+        title: str,
+        message: str,
+        *,
+        warning: bool = False,
+        language: str = "es",
     ) -> None:
         super().__init__(parent)
+        self.language = normalize_language(language)
+        title = translate_text(title, self.language)
+        message = translate_text(message, self.language)
         self.title(title)
         self.transient(parent)
         self.resizable(True, True)
@@ -134,10 +146,22 @@ class CopyableErrorDialog(tk.Toplevel):
             side=tk.LEFT, fill=tk.X, expand=True
         )
         self.copy_button = ttk.Button(
-            footer, text="Copiar al portapapeles", command=self.copy_report
+            footer,
+            text=translate_text("Copiar al portapapeles", self.language),
+            command=self.copy_report,
         )
         self.copy_button.pack(side=tk.RIGHT, padx=(0, 8))
-        ttk.Button(footer, text="Cerrar", command=self.destroy).pack(side=tk.RIGHT)
+        ttk.Button(
+            footer, text=translate_text("Cerrar", self.language), command=self.destroy
+        ).pack(side=tk.RIGHT)
+        for widget in (body, *body.winfo_children()):
+            try:
+                label = widget.cget("text")
+            except tk.TclError:
+                continue
+            if label:
+                widget.configure(text=translate_text(label, self.language))
+        self.report = format_error_for_clipboard(title, message)
         self.bind("<Escape>", lambda _event: self.destroy())
         self.grab_set()
         self.focus_set()
@@ -148,9 +172,25 @@ class CopyableErrorDialog(tk.Toplevel):
             self.clipboard_append(self.report)
             self.update_idletasks()
         except tk.TclError:
-            self.copy_status.set("No se pudo acceder al portapapeles.")
+            self.copy_status.set(
+                translate_text("No se pudo acceder al portapapeles.", self.language)
+            )
         else:
-            self.copy_status.set("Informe copiado; ya puedes pegarlo.")
+            self.copy_status.set(
+                translate_text("Informe copiado; ya puedes pegarlo.", self.language)
+            )
+
+
+class LocalizedStringVar(tk.StringVar):
+    """StringVar que traduce al actualizar un mensaje visible de la interfaz."""
+
+    def __init__(self, master: tk.Misc, language_getter, value: str = "") -> None:
+        self._language_getter = language_getter
+        super().__init__(master=master)
+        self.set(value)
+
+    def set(self, value: str) -> None:
+        super().set(translate_text(str(value), self._language_getter()))
 
 
 def discover_mpqs(root: Path) -> list[Path]:
@@ -178,26 +218,28 @@ class MPQStudioApp:
         self.root.geometry("1180x720")
         self.root.minsize(900, 560)
 
-        self.remember_workspace = tk.BooleanVar(value=True)
         self.settings_path = default_settings_path()
+        self.language = load_language_setting(self.settings_path)
+        self._localized_vars: list[LocalizedStringVar] = []
+        self.remember_workspace = tk.BooleanVar(value=True)
         self.selected_path = tk.StringVar()
         self.search_text = tk.StringVar()
-        self.listfile_text = tk.StringVar(value="No cargado")
+        self.listfile_text = self._localized_var("No cargado")
         self.include_listfile = tk.BooleanVar(value=False)
-        self.workspace_text = tk.StringVar(value="No seleccionada")
-        self.export_status = tk.StringVar(value="Selecciona un archivo MPQ.")
-        self.import_status = tk.StringVar(value="Selecciona una carpeta de trabajo.")
-        self.destination_text = tk.StringVar(value="No seleccionado")
-        self.plan_text = tk.StringVar(value="Selecciona el directorio de destino.")
-        self.glue_warning = tk.StringVar()
-        self.property_name = tk.StringVar(value="Sin selección")
-        self.property_type = tk.StringVar(value="—")
+        self.workspace_text = tk.StringVar(value=self._tr("No seleccionada"))
+        self.export_status = self._localized_var("Selecciona un archivo MPQ.")
+        self.import_status = self._localized_var("Selecciona una carpeta de trabajo.")
+        self.destination_text = tk.StringVar(value=self._tr("No seleccionado"))
+        self.plan_text = self._localized_var("Selecciona el directorio de destino.")
+        self.glue_warning = self._localized_var()
+        self.property_name = tk.StringVar(value=self._tr("Sin selección"))
+        self.property_type = self._localized_var("—")
         self.property_source = tk.StringVar(value="—")
         self.property_path = tk.StringVar(value="—")
         self.property_size = tk.StringVar(value="—")
         self.property_packed_size = tk.StringVar(value="—")
-        self.property_flags = tk.StringVar(value="—")
-        self.property_sha256 = tk.StringVar(value="—")
+        self.property_flags = self._localized_var("—")
+        self.property_sha256 = self._localized_var("—")
 
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
@@ -210,9 +252,11 @@ class MPQStudioApp:
         self.export_queue: dict[str, QueuedExport] = {}
         self.package_items: dict[str, Path] = {}
         self.package_queue: dict[str, Path] = {}
+        self.context_menus: list[tk.Menu] = []
 
         self._configure_style()
         self._build_ui()
+        self._apply_language()
         remember, last_workspace = load_workspace_settings(self.settings_path)
         self.remember_workspace.set(remember)
         if remember and last_workspace is not None:
@@ -221,6 +265,70 @@ class MPQStudioApp:
         self._update_actions()
         if self.selected_path.get():
             self.root.after_idle(self.open_selected)
+
+    def _tr(self, text: str) -> str:
+        return translate_text(text, self.language)
+
+    def _localized_var(self, value: str = "") -> LocalizedStringVar:
+        variable = LocalizedStringVar(self.root, lambda: self.language, value)
+        self._localized_vars.append(variable)
+        return variable
+
+    def toggle_language(self) -> None:
+        self.language = "en" if self.language == "es" else "es"
+        self._apply_language()
+        try:
+            save_language_setting(self.settings_path, self.language)
+        except OSError as exc:
+            self._show_error("No se pudo guardar la preferencia", str(exc), warning=True)
+
+    def _apply_language(self) -> None:
+        def visit(parent: tk.Misc) -> None:
+            for widget in parent.winfo_children():
+                if isinstance(widget, ttk.Notebook):
+                    for tab_id in widget.tabs():
+                        current = widget.tab(tab_id, "text")
+                        widget.tab(tab_id, text=self._tr(current))
+                if isinstance(widget, ttk.Treeview):
+                    for column in ("#0", *widget["columns"]):
+                        heading = widget.heading(column, "text")
+                        if heading:
+                            widget.heading(column, text=self._tr(heading))
+                    for item in widget.get_children(""):
+                        self._translate_tree_values(widget, item)
+                else:
+                    try:
+                        current = widget.cget("text")
+                    except tk.TclError:
+                        current = ""
+                    if current:
+                        try:
+                            widget.configure(text=self._tr(current))
+                        except tk.TclError:
+                            pass
+                visit(widget)
+
+        visit(self.root)
+        for menu in self.context_menus:
+            end_index = menu.index("end")
+            for index in range(int(end_index) + 1 if end_index is not None else 0):
+                label = menu.entrycget(index, "label")
+                if label:
+                    menu.entryconfigure(index, label=self._tr(label))
+        self.language_button.configure(
+            text="English" if self.language == "es" else "Español"
+        )
+        for variable in self._localized_vars:
+            variable.set(variable.get())
+        if self.property_name.get() in {"Sin selección", "No selection"}:
+            self.property_name.set(self._tr("Sin selección"))
+
+    def _translate_tree_values(self, tree: ttk.Treeview, item: str) -> None:
+        values = tree.item(item, "values")
+        if values:
+            tree.item(item, values=tuple(self._tr(value) for value in values))
+        for child in tree.get_children(item):
+            self._translate_tree_values(tree, child)
 
     def _configure_style(self) -> None:
         style = ttk.Style(self.root)
@@ -250,6 +358,12 @@ class MPQStudioApp:
             header, text="Acerca de", command=self.show_about
         )
         self.about_button.pack(side=tk.RIGHT, padx=(0, 10))
+        self.language_button = ttk.Button(
+            header,
+            text="English" if self.language == "es" else "Español",
+            command=self.toggle_language,
+        )
+        self.language_button.pack(side=tk.RIGHT, padx=(0, 8))
 
         workspace_bar = ttk.LabelFrame(outer, text="Carpeta de trabajo", padding=8)
         workspace_bar.pack(fill=tk.X, pady=(0, 10))
@@ -288,17 +402,29 @@ class MPQStudioApp:
 
     def show_about(self) -> None:
         messagebox.showinfo(
-            "Acerca de AzaleaCore MPQ Studio",
-            f"AzaleaCore MPQ Studio\n"
-            f"Versión {__version__}\n\n"
-            "Herramienta de AzerothCore Labs para explorar, extraer y crear "
-            "archivos MPQ de World of Warcraft 3.3.5a.\n\n"
-            "Los MPQ de origen se abren en modo de solo lectura.",
+            self._tr("Acerca de AzaleaCore MPQ Studio"),
+            self._tr(
+                f"AzaleaCore MPQ Studio\n"
+                f"Versión {__version__}\n\n"
+                "Herramienta de AzerothCore Labs para explorar, extraer y crear "
+                "archivos MPQ de World of Warcraft 3.3.5a.\n\n"
+                "Los MPQ de origen se abren en modo de solo lectura."
+            ),
             parent=self.root,
         )
 
     def _show_error(self, title: str, message: str, *, warning: bool = False) -> None:
-        CopyableErrorDialog(self.root, title, message, warning=warning)
+        CopyableErrorDialog(
+            self.root, title, message, warning=warning, language=self.language
+        )
+
+    def _show_info(self, title: str, message: str) -> None:
+        messagebox.showinfo(self._tr(title), self._tr(message), parent=self.root)
+
+    def _ask_yesno(self, title: str, message: str) -> bool:
+        return messagebox.askyesno(
+            self._tr(title), self._tr(message), parent=self.root
+        )
 
     def _build_export_tab(self) -> None:
         chooser = ttk.Frame(self.export_tab)
@@ -579,7 +705,9 @@ class MPQStudioApp:
         return tree
 
     def choose_workspace(self) -> None:
-        selected = filedialog.askdirectory(parent=self.root, title="Carpeta de trabajo")
+        selected = filedialog.askdirectory(
+            parent=self.root, title=self._tr("Carpeta de trabajo")
+        )
         if not selected:
             return
         self._set_workspace(selected)
@@ -633,9 +761,12 @@ class MPQStudioApp:
     def browse_archive(self) -> None:
         filename = filedialog.askopenfilename(
             parent=self.root,
-            title="Seleccionar archivo MPQ",
+            title=self._tr("Seleccionar archivo MPQ"),
             initialdir=str(DEFAULT_DATA_DIR if DEFAULT_DATA_DIR.is_dir() else Path.cwd()),
-            filetypes=(("Archivos MPQ", "*.MPQ *.mpq"), ("Todos", "*.*")),
+            filetypes=(
+                (self._tr("Archivos MPQ"), "*.MPQ *.mpq"),
+                (self._tr("Todos"), "*.*"),
+            ),
         )
         if filename:
             values = list(self.combo["values"])
@@ -648,10 +779,10 @@ class MPQStudioApp:
     def browse_listfile(self) -> None:
         filename = filedialog.askopenfilename(
             parent=self.root,
-            title="Seleccionar listfile externo",
+            title=self._tr("Seleccionar listfile externo"),
             filetypes=(
-                ("Listfile o texto", "(listfile) *.txt *.lst"),
-                ("Todos los archivos", "*.*"),
+                (self._tr("Listfile o texto"), "(listfile) *.txt *.lst"),
+                (self._tr("Todos los archivos"), "*.*"),
             ),
         )
         if not filename:
@@ -769,6 +900,8 @@ class MPQStudioApp:
         return "break"
 
     def _bind_context_menu(self, tree: ttk.Treeview, menu: tk.Menu) -> None:
+        self.context_menus.append(menu)
+
         def show_menu(event: tk.Event) -> str:
             row = tree.identify_row(event.y)
             if row:
@@ -820,7 +953,7 @@ class MPQStudioApp:
                 key = parts[:depth]
                 if key not in folders:
                     folders[key] = self.archive_tree.insert(
-                        parent, tk.END, text=part, values=("Carpeta", ""), open=False
+                        parent, tk.END, text=part, values=(self._tr("Carpeta"), ""), open=False
                     )
                 parent = folders[key]
             node = self.archive_tree.insert(
@@ -958,10 +1091,9 @@ class MPQStudioApp:
             if self.workspace.export_dir.joinpath(*request.internal_path.split("\\")).exists()
         ]
         if collisions:
-            overwrite = messagebox.askyesno(
+            overwrite = self._ask_yesno(
                 "Archivos existentes",
                 f"Ya existen {len(collisions)} archivo(s). ¿Quieres sobrescribirlos?",
-                parent=self.root,
             )
             if not overwrite:
                 return
@@ -970,10 +1102,9 @@ class MPQStudioApp:
         except (OSError, MPQError, ValueError) as exc:
             self._show_error("Error de extracción", str(exc))
             return
-        messagebox.showinfo(
+        self._show_info(
             "Extracción completada",
             f"Se extrajeron {len(results)} archivo(s) en:\n{self.workspace.export_dir}",
-            parent=self.root,
         )
         self.export_status.set(f"Extracción completada: {len(results)} archivo(s).")
 
@@ -991,7 +1122,11 @@ class MPQStudioApp:
             parent_node = folders.get(path.parent, "")
             if path.is_dir():
                 node = self.package_tree.insert(
-                    parent_node, tk.END, text=path.name, values=("Carpeta", ""), open=False
+                    parent_node,
+                    tk.END,
+                    text=path.name,
+                    values=(self._tr("Carpeta"), ""),
+                    open=False,
                 )
                 folders[path] = node
             elif path.is_file():
@@ -999,7 +1134,10 @@ class MPQStudioApp:
                     parent_node,
                     tk.END,
                     text=path.name,
-                    values=(path.suffix.upper().lstrip(".") or "Archivo", format_bytes(path.stat().st_size)),
+                    values=(
+                        path.suffix.upper().lstrip(".") or self._tr("Archivo"),
+                        format_bytes(path.stat().st_size),
+                    ),
                 )
                 self.package_items[node] = path
         self.import_status.set(f"{len(self.package_items)} archivo(s) disponibles para empaquetar.")
@@ -1073,7 +1211,7 @@ class MPQStudioApp:
     def choose_destination(self) -> None:
         selected = filedialog.askdirectory(
             parent=self.root,
-            title="Directorio donde se instalará el parche",
+            title=self._tr("Directorio donde se instalará el parche"),
             initialdir=str(DEFAULT_DATA_DIR if DEFAULT_DATA_DIR.is_dir() else Path.cwd()),
         )
         if not selected:
@@ -1110,13 +1248,12 @@ class MPQStudioApp:
             if self.include_listfile.get()
             else "\n\nEl paquete se mantendrá mínimo, sin `(listfile)`."
         )
-        if not messagebox.askyesno(
+        if not self._ask_yesno(
             "Confirmar creación e instalación",
             f"{self.patch_plan.message}\n\nDestino:\n{self.patch_plan.target}\n\n"
             f"Archivos ({len(files)}):\n{summary}{glue_notice}"
             f"{listfile_notice}"
             "\n\nNo se sobrescribirá ningún MPQ.",
-            parent=self.root,
         ):
             return
         try:
@@ -1128,10 +1265,9 @@ class MPQStudioApp:
         except (OSError, PackagingError, MPQError) as exc:
             self._show_error("No se pudo crear el parche", str(exc))
             return
-        messagebox.showinfo(
+        self._show_info(
             "Parche creado y validado",
             f"{self.patch_plan.target}\n\nTamaño: {format_bytes(size)}\nSHA-256: {digest}",
-            parent=self.root,
         )
         self.import_status.set(f"Creado y validado: {self.patch_plan.target.name}")
         self.refresh_archive_list()

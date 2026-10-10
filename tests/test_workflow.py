@@ -5,8 +5,10 @@ from __future__ import annotations
 import tempfile
 import struct
 import sys
+import tkinter as tk
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from azaleacore_mpq_studio.app import (
     calculate_mpq_sha256,
@@ -15,6 +17,7 @@ from azaleacore_mpq_studio.app import (
     format_error_for_clipboard,
     _set_windows_app_user_model_id,
 )
+from azaleacore_mpq_studio.i18n import normalize_language, translate_text
 from azaleacore_mpq_studio.mpq import (
     MPQ_FILE_COMPRESS,
     MPQ_FILE_EXISTS,
@@ -29,7 +32,12 @@ from azaleacore_mpq_studio.packer import (
     is_protected_gluexml,
     plan_patch,
 )
-from azaleacore_mpq_studio.settings import load_workspace_settings, save_workspace_settings
+from azaleacore_mpq_studio.settings import (
+    load_language_setting,
+    load_workspace_settings,
+    save_language_setting,
+    save_workspace_settings,
+)
 from azaleacore_mpq_studio.workspace import (
     ExportRequest,
     export_files,
@@ -82,6 +90,95 @@ class PatchPlanningTest(unittest.TestCase):
 
             save_workspace_settings(settings, remember=False, workspace=workspace)
             self.assertEqual(load_workspace_settings(settings), (False, None))
+
+    def test_language_preference_persists_without_overwriting_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = root / "settings.json"
+            workspace = root / "workspace"
+            workspace.mkdir()
+
+            save_workspace_settings(settings, remember=True, workspace=workspace)
+            save_language_setting(settings, "en")
+            self.assertEqual(load_language_setting(settings), "en")
+            self.assertEqual(load_workspace_settings(settings), (True, workspace))
+
+            save_workspace_settings(settings, remember=False, workspace=workspace)
+            self.assertEqual(load_language_setting(settings), "en")
+            self.assertEqual(load_workspace_settings(settings), (False, None))
+
+    def test_language_translation_switches_both_directions(self) -> None:
+        spanish = "Pila de extracción"
+        english = "Extraction queue"
+        self.assertEqual(normalize_language("fr"), "es")
+        self.assertEqual(translate_text(spanish, "en"), english)
+        self.assertEqual(translate_text(english, "es"), spanish)
+        self.assertEqual(
+            translate_text(
+                "ADVERTENCIA GLUEXML: el cliente WoW 3.3.5a original rechazará "
+                "este parche como interfaz de inicio de sesión dañada. Úsalo sólo "
+                "con un cliente de laboratorio compatible.",
+                "en",
+            ),
+            "GLUEXML WARNING: the original WoW 3.3.5a client will reject this "
+            "patch as a corrupted login interface. Use it only with a compatible "
+            "lab client.",
+        )
+        self.assertEqual(
+            translate_text(
+                "En este directorio no hay parches prioritarios compatibles. "
+                "Se creará patch-1.MPQ como primer parche.",
+                "en",
+            ),
+            "There are no compatible priority patches in this folder. "
+            "The new patch will be patch-1.MPQ as the first patch.",
+        )
+        self.assertEqual(
+            translate_text("0x80000200 · EXISTE | COMPRIMIDO", "en"),
+            "0x80000200 · EXISTS | COMPRESSED",
+        )
+
+    @unittest.skipUnless(sys.platform == "win32", "la prueba gráfica requiere Windows")
+    def test_app_language_toggle_updates_widgets_menus_and_persists(self) -> None:
+        from azaleacore_mpq_studio import app as app_module
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = tk.Tk()
+            root.withdraw()
+            settings = Path(temporary) / "settings.json"
+            try:
+                with (
+                    patch.object(app_module, "default_settings_path", return_value=settings),
+                    patch.object(app_module, "DEFAULT_DATA_DIR", Path(temporary)),
+                ):
+                    studio = app_module.MPQStudioApp(root)
+                    root.update_idletasks()
+                    self.assertEqual(studio.notebook.tab(studio.export_tab, "text"), "EXPORTAR")
+                    self.assertEqual(studio.export_status.get(), "Selecciona un archivo MPQ.")
+
+                    studio.toggle_language()
+                    root.update_idletasks()
+                    self.assertEqual(studio.language, "en")
+                    self.assertEqual(studio.notebook.tab(studio.export_tab, "text"), "EXPORT")
+                    self.assertEqual(studio.archive_tree.heading("#0", "text"), "Name")
+                    self.assertEqual(
+                        studio.archive_menu.entrycget(0, "label"),
+                        "Add selection to extraction queue",
+                    )
+                    self.assertEqual(studio.language_button.cget("text"), "Español")
+                    self.assertEqual(load_language_setting(settings), "en")
+
+                    studio.toggle_language()
+                    self.assertEqual(studio.notebook.tab(studio.export_tab, "text"), "EXPORTAR")
+                    self.assertEqual(
+                        studio.archive_menu.entrycget(0, "label"),
+                        "Añadir selección a extracción",
+                    )
+                    self.assertEqual(load_language_setting(settings), "es")
+            except tk.TclError as exc:
+                self.skipTest(f"no se pudo inicializar Tk: {exc}")
+            finally:
+                root.destroy()
 
     def test_mpq_flags_are_shown_in_hex_and_plain_language(self) -> None:
         description = describe_mpq_flags(MPQ_FILE_EXISTS | MPQ_FILE_COMPRESS)
