@@ -179,6 +179,7 @@ class MPQStudioApp:
         self.selected_path = tk.StringVar()
         self.search_text = tk.StringVar()
         self.listfile_text = tk.StringVar(value="No cargado")
+        self.include_listfile = tk.BooleanVar(value=False)
         self.workspace_text = tk.StringVar(value="No seleccionada")
         self.export_status = tk.StringVar(value="Selecciona un archivo MPQ.")
         self.import_status = tk.StringVar(value="Selecciona una carpeta de trabajo.")
@@ -490,6 +491,12 @@ class MPQStudioApp:
         ttk.Button(
             destination, text="Seleccionar...", command=self.choose_destination
         ).pack(side=tk.RIGHT)
+        self.include_listfile_check = ttk.Checkbutton(
+            destination,
+            text="Añadir (listfile)",
+            variable=self.include_listfile,
+        )
+        self.include_listfile_check.pack(side=tk.RIGHT, padx=(0, 12))
 
         plan_bar = ttk.Frame(self.import_tab)
         plan_bar.pack(fill=tk.X, pady=(8, 0))
@@ -950,16 +957,26 @@ class MPQStudioApp:
                 "\n\nADVERTENCIA: la selección contiene Interface\\GlueXML. "
                 "El cliente 3.3.5a original rechazará el parche."
             )
+        listfile_notice = (
+            "\n\nSe añadirá un `(listfile)` con las rutas internas del paquete."
+            if self.include_listfile.get()
+            else "\n\nEl paquete se mantendrá mínimo, sin `(listfile)`."
+        )
         if not messagebox.askyesno(
             "Confirmar creación e instalación",
             f"{self.patch_plan.message}\n\nDestino:\n{self.patch_plan.target}\n\n"
             f"Archivos ({len(files)}):\n{summary}{glue_notice}"
+            f"{listfile_notice}"
             "\n\nNo se sobrescribirá ningún MPQ.",
             parent=self.root,
         ):
             return
         try:
-            digest, size = create_and_install_patch(files, self.patch_plan)
+            digest, size = create_and_install_patch(
+                files,
+                self.patch_plan,
+                include_listfile=self.include_listfile.get(),
+            )
         except (OSError, PackagingError, MPQError) as exc:
             self._show_error("No se pudo crear el parche", str(exc))
             return

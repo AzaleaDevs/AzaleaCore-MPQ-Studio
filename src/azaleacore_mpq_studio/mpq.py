@@ -310,10 +310,15 @@ class MPQArchive:
             info = self.file_info(path)
             if block_index is not None and info is not None:
                 identified.setdefault(block_index, info)
+        listfile_info = self.file_info("(listfile)")
+        if listfile_info is not None:
+            listfile_index = self._find_block_index("(listfile)")
+            if listfile_index is not None:
+                identified.setdefault(listfile_index, listfile_info)
         active = self._active_block_indices()
         return MPQInventory(
             files=tuple(sorted(identified.values(), key=lambda item: item.path.casefold())),
             active_entries=len(active),
             unknown_entries=len(active - identified.keys()),
-            has_listfile=bool(listfile_paths),
+            has_listfile=bool(listfile_paths) or listfile_info is not None,
         )

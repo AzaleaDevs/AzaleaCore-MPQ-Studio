@@ -58,8 +58,8 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 39. Detectar archivos cifrados y explicar su estado sin fallar todo el árbol.
 - [ ] 40. Investigar y probar MPQ con cabecera incrustada o desplazada.
 - [ ] 41. Investigar archivos delta MPQ sin implementarlos prematuramente.
-- [ ] 42. Añadir opción para incluir `(listfile)` en MPQ creados por Studio.
-- [ ] 43. Mantener el modo de parche mínimo sin `(listfile)`.
+- [x] 42. Añadir opción para incluir `(listfile)` en MPQ creados por Studio.
+- [x] 43. Mantener el modo de parche mínimo sin `(listfile)`.
 
 ## Experiencia de usuario y distribución
 

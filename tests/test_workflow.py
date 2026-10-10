@@ -129,6 +129,32 @@ class PatchPlanningTest(unittest.TestCase):
 
 
 class PackagingRoundTripTest(unittest.TestCase):
+    def test_optional_listfile_is_written_and_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = prepare_workspace(root / "workspace")
+            internal_path = "Interface\\Demo\\sample.txt"
+            source = workspace.package_dir / "Interface" / "Demo" / "sample.txt"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"demo payload")
+            destination = root / "destination"
+            destination.mkdir()
+            plan = plan_patch(destination)
+
+            create_and_install_patch(
+                [(internal_path, source)], plan, include_listfile=True
+            )
+
+            with MPQArchive(plan.target) as archive:
+                inventory = archive.inventory()
+                self.assertEqual(archive.active_entry_count, 2)
+                self.assertTrue(inventory.has_listfile)
+                self.assertEqual(inventory.unknown_entries, 0)
+                self.assertEqual(
+                    archive.read_file("(listfile)"),
+                    (internal_path + "\r\n").encode("utf-8"),
+                )
+
     def test_external_listfile_discovers_unlisted_mpq_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -162,6 +188,7 @@ class PackagingRoundTripTest(unittest.TestCase):
             self.assertTrue(digest)
             self.assertEqual(size, plan.target.stat().st_size)
             with MPQArchive(plan.target) as archive:
+                self.assertFalse(archive.inventory().has_listfile)
                 self.assertEqual(
                     archive.read_file("Interface\\Demo\\sample.txt"),
                     b"AzaleaCore MPQ Studio\n",

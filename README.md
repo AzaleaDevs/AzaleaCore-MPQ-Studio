@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.10 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.11 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
@@ -31,6 +31,10 @@ puede desactivar en cualquier momento.
 6. Elegir el directorio de instalación y revisar el nombre propuesto.
 7. Confirmar la creación. Studio reabre el MPQ y compara todos sus bytes antes
    de instalarlo.
+
+En IMPORTAR, **Añadir (listfile)** agrega de forma opcional un índice con las
+rutas internas al MPQ nuevo. La casilla está desactivada por defecto; sin ella,
+se conserva el modo de parche mínimo.
 
 En la pestaña EXPORTAR, el campo **Buscar** filtra instantáneamente por cualquier
 fragmento de la ruta interna. `Ctrl+F` lleva el foco al buscador.

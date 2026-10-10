@@ -117,12 +117,26 @@ def plan_patch(destination_dir: Path | str) -> PatchPlan:
     return PatchPlan(directory, name, target, previous, message)
 
 
-def build_mpq(files: Iterable[tuple[str, bytes]], destination: Path) -> None:
+def _listfile_payload(files: Iterable[tuple[str, bytes]]) -> bytes:
+    paths = sorted((name for name, _payload in files), key=str.casefold)
+    return ("\r\n".join(paths) + "\r\n").encode("utf-8")
+
+
+def build_mpq(
+    files: Iterable[tuple[str, bytes]],
+    destination: Path,
+    *,
+    include_listfile: bool = False,
+) -> None:
     normalized = [(name.replace("/", "\\"), payload) for name, payload in files]
     if not normalized:
         raise PackagingError("No hay archivos seleccionados para empaquetar.")
     if len({name.casefold() for name, _ in normalized}) != len(normalized):
         raise PackagingError("Hay rutas internas duplicadas.")
+    if include_listfile:
+        if any(name.casefold() == "(listfile)" for name, _payload in normalized):
+            raise PackagingError("La ruta interna (listfile) está reservada.")
+        normalized.append(("(listfile)", _listfile_payload(normalized)))
 
     hash_count = _next_power_of_two(max(8, len(normalized) * 2))
     empty = (0xFFFFFFFF, 0xFFFFFFFF, 0xFFFF, 0xFFFF, 0xFFFFFFFF)
@@ -175,6 +189,8 @@ def build_mpq(files: Iterable[tuple[str, bytes]], destination: Path) -> None:
 def create_and_install_patch(
     files: Iterable[tuple[str, Path]],
     plan: PatchPlan,
+    *,
+    include_listfile: bool = False,
 ) -> tuple[str, int]:
     selected = [(name, Path(path).read_bytes()) for name, path in files]
     if plan.target.exists():
@@ -183,9 +199,10 @@ def create_and_install_patch(
     temporary_root = Path(tempfile.mkdtemp(prefix="azaleacore-mpq-studio-"))
     temporary_mpq = temporary_root / plan.patch_name
     try:
-        build_mpq(selected, temporary_mpq)
+        build_mpq(selected, temporary_mpq, include_listfile=include_listfile)
         with MPQArchive(temporary_mpq) as archive:
-            if archive.active_entry_count != len(selected):
+            expected_entries = len(selected) + int(include_listfile)
+            if archive.active_entry_count != expected_entries:
                 raise PackagingError("El MPQ reabierto no conserva todas las entradas.")
             for internal_path, expected in selected:
                 actual = archive.read_file(internal_path)
@@ -193,6 +210,10 @@ def create_and_install_patch(
                     raise PackagingError(
                         f"La validación byte a byte falló para {internal_path}."
                     )
+            if include_listfile:
+                expected_listfile = _listfile_payload(selected)
+                if archive.read_file("(listfile)") != expected_listfile:
+                    raise PackagingError("El `(listfile)` generado no pasó la validación.")
 
         try:
             with plan.target.open("xb") as output, temporary_mpq.open("rb") as source:
