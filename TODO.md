@@ -72,7 +72,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [x] 49a. Mostrar versión e información del proyecto en “Acerca de”.
 - [x] 49b. Crear icono de aplicación.
 - [x] 49c. Usar el icono propio en la barra de tareas de Windows.
-- [ ] 50. Empaquetar una versión portable para Windows.
+- [x] 50. Empaquetar una versión portable para Windows.
 - [ ] 51. Probar la versión portable en un equipo sin Python instalado.
 - [ ] 52. Preparar manual de usuario y capturas para AzerothCore Labs.
 

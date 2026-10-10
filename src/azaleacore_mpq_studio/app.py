@@ -44,7 +44,8 @@ from .workspace import ExportRequest, Workspace, export_files, prepare_workspace
 
 
 DEFAULT_DATA_DIR = Path(r"D:\World of Warcraft 3.3.5a\Data")
-APP_ICON_PATH = Path(__file__).resolve().parents[2] / "assets" / "azaleacore-mpq-studio.ico"
+APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+APP_ICON_PATH = APP_ROOT / "assets" / "azaleacore-mpq-studio.ico"
 WINDOWS_APP_USER_MODEL_ID = "AzaleaDevs.AzaleaCoreMPQStudio"
 
 

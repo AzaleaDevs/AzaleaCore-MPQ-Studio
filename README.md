@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.13 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.14 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
@@ -109,6 +109,20 @@ python -m azaleacore_mpq_studio --inspect "D:\World of Warcraft 3.3.5a\Data\patc
 MPQ almacena hashes de las rutas. Si el archivo contiene `(listfile)`, Studio
 lo utiliza. Si no lo contiene, prueba un catálogo local de rutas conocidas y
 avisa del número de entradas cuyo nombre todavía no puede recuperar.
+
+## Versión portable para Windows
+
+La carpeta portable se puede copiar y ejecutar en Windows sin instalar Python.
+Para compilarla desde un entorno Windows con Python 3.11 o posterior, ejecuta:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build_portable.ps1
+```
+
+La primera compilación crea un entorno virtual local e instala PyInstaller desde
+PyPI; requiere conexión a Internet. El resultado contiene la carpeta completa
+de la aplicación y un ZIP para distribuir. Se compila en Windows porque
+PyInstaller no es un compilador cruzado.
 
 ## Seguridad
 
