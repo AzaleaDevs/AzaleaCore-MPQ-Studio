@@ -4,7 +4,9 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-Proyecto en fase inicial. Todavía no manipula archivos MPQ.
+La primera versión incluye un lector MPQ de solo lectura y una ventana gráfica
+con selector de archivo y árbol de carpetas expandible. Todavía no extrae ni
+crea archivos MPQ.
 
 ## Principios
 
@@ -27,11 +29,30 @@ Proyecto en fase inicial. Todavía no manipula archivos MPQ.
 
 Requiere Python 3.11 o posterior.
 
+En Windows se puede abrir con doble clic en:
+
+```text
+Iniciar AzaleaCore MPQ Studio.bat
+```
+
+O desde PowerShell:
+
 ```powershell
+$env:PYTHONPATH = "$PWD\src"
 python -m azaleacore_mpq_studio
 ```
 
-La interfaz gráfica y el motor MPQ se incorporarán de forma incremental.
+También se puede inspeccionar un MPQ desde consola:
+
+```powershell
+python -m azaleacore_mpq_studio --inspect "D:\World of Warcraft 3.3.5a\Data\patch-9.MPQ"
+```
+
+### Sobre los nombres internos
+
+MPQ almacena hashes de las rutas. Si el archivo contiene `(listfile)`, Studio
+lo utiliza. Si no lo contiene, prueba un catálogo local de rutas conocidas y
+avisa del número de entradas cuyo nombre todavía no puede recuperar.
 
 ## Seguridad
 
