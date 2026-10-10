@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.4 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.5 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
@@ -24,7 +24,9 @@ En la pestaña EXPORTAR, el campo **Buscar** filtra instantáneamente por cualqu
 fragmento de la ruta interna. `Ctrl+F` lleva el foco al buscador.
 
 Al seleccionar un único archivo o carpeta, el panel inferior muestra sus
-propiedades básicas y el MPQ del que procede.
+propiedades. Para los archivos incluye la ruta interna, los tamaños real y
+almacenado, los flags MPQ y un botón que calcula el SHA-256 bajo demanda sin
+escribir en el archivo original.
 
 El programa nunca sobrescribe un parche. Si detecta `patch-8.MPQ`, propone
 `patch-9.MPQ`. Si ya existe la ranura 9, bloquea `patch-10.MPQ` porque el cargador

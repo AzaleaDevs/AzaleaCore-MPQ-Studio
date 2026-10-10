@@ -6,8 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from azaleacore_mpq_studio.app import filter_mpq_files
-from azaleacore_mpq_studio.mpq import MPQFile
+from azaleacore_mpq_studio.app import (
+    calculate_mpq_sha256,
+    describe_mpq_flags,
+    filter_mpq_files,
+)
+from azaleacore_mpq_studio.mpq import MPQ_FILE_COMPRESS, MPQ_FILE_EXISTS, MPQFile
 
 from azaleacore_mpq_studio.mpq import MPQArchive
 from azaleacore_mpq_studio.packer import (
@@ -28,6 +32,10 @@ HIGHLIGHT = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_mpq_flags_are_shown_in_hex_and_plain_language(self) -> None:
+        description = describe_mpq_flags(MPQ_FILE_EXISTS | MPQ_FILE_COMPRESS)
+        self.assertEqual(description, "0x80000200 · EXISTE | COMPRIMIDO")
+
     def test_gluexml_paths_are_detected_case_insensitively(self) -> None:
         self.assertTrue(
             is_protected_gluexml("Interface\\GlueXML\\GlueStrings.lua")
@@ -98,6 +106,10 @@ class PackagingRoundTripTest(unittest.TestCase):
                     archive.read_file("Interface\\Demo\\sample.txt"),
                     b"AzaleaCore MPQ Studio\n",
                 )
+            self.assertEqual(
+                calculate_mpq_sha256(plan.target, "Interface\\Demo\\sample.txt"),
+                "e2ceabaa40908dc9ccddc62e734ef3c524c1466d8575afed7643ddb235e4e2a1",
+            )
 
 
 @unittest.skipUnless(PATCH9.is_file(), "patch-9.MPQ no está instalado")

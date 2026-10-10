@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import struct
 import tkinter as tk
 from dataclasses import dataclass
@@ -9,7 +10,20 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .catalog import known_paths
-from .mpq import MPQArchive, MPQError, MPQFile
+from .mpq import (
+    MPQ_FILE_COMPRESS,
+    MPQ_FILE_DELETE_MARKER,
+    MPQ_FILE_ENCRYPTED,
+    MPQ_FILE_EXISTS,
+    MPQ_FILE_FIX_KEY,
+    MPQ_FILE_IMPLODE,
+    MPQ_FILE_PATCH_FILE,
+    MPQ_FILE_SECTOR_CRC,
+    MPQ_FILE_SINGLE_UNIT,
+    MPQArchive,
+    MPQError,
+    MPQFile,
+)
 from .packer import (
     PackagingError,
     PatchPlan,
@@ -35,6 +49,36 @@ def filter_mpq_files(files: tuple[MPQFile, ...], query: str) -> tuple[MPQFile, .
     if not normalized:
         return files
     return tuple(item for item in files if normalized in item.path.casefold())
+
+
+def describe_mpq_flags(flags: int) -> str:
+    """Convierte los indicadores MPQ conocidos en una descripción legible."""
+    known_flags = (
+        (MPQ_FILE_EXISTS, "EXISTE"),
+        (MPQ_FILE_COMPRESS, "COMPRIMIDO"),
+        (MPQ_FILE_IMPLODE, "IMPLODE"),
+        (MPQ_FILE_ENCRYPTED, "CIFRADO"),
+        (MPQ_FILE_FIX_KEY, "CLAVE AJUSTADA"),
+        (MPQ_FILE_PATCH_FILE, "DELTA"),
+        (MPQ_FILE_SINGLE_UNIT, "UNIDAD ÚNICA"),
+        (MPQ_FILE_DELETE_MARKER, "MARCADO BORRADO"),
+        (MPQ_FILE_SECTOR_CRC, "CRC DE SECTORES"),
+    )
+    labels = [label for mask, label in known_flags if flags & mask]
+    known_mask = sum(mask for mask, _label in known_flags)
+    unknown = flags & ~known_mask
+    if unknown:
+        labels.append(f"OTROS 0x{unknown:08X}")
+    return f"0x{flags:08X}" + (f" · {' | '.join(labels)}" if labels else "")
+
+
+def calculate_mpq_sha256(source: Path, internal_path: str) -> str:
+    """Calcula el SHA-256 del contenido lógico de un archivo dentro del MPQ."""
+    with MPQArchive(source) as archive:
+        payload = archive.read_file(internal_path)
+    if payload is None:
+        raise MPQError(f"No se encontró el archivo: {internal_path}")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def discover_mpqs(root: Path) -> list[Path]:
@@ -68,6 +112,11 @@ class MPQStudioApp:
         self.property_name = tk.StringVar(value="Sin selección")
         self.property_type = tk.StringVar(value="—")
         self.property_source = tk.StringVar(value="—")
+        self.property_path = tk.StringVar(value="—")
+        self.property_size = tk.StringVar(value="—")
+        self.property_packed_size = tk.StringVar(value="—")
+        self.property_flags = tk.StringVar(value="—")
+        self.property_sha256 = tk.StringVar(value="—")
 
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
@@ -194,9 +243,32 @@ class MPQStudioApp:
         )
         properties.pack(fill=tk.X, pady=(8, 0))
         self._property_row(properties, 0, "Nombre", self.property_name)
-        self._property_row(properties, 1, "Tipo", self.property_type)
-        self._property_row(properties, 2, "MPQ de origen", self.property_source)
+        self._property_row(properties, 0, "Tipo", self.property_type, column=2)
+        self._property_row(
+            properties, 1, "MPQ de origen", self.property_source, value_span=3
+        )
+        self._property_row(
+            properties, 2, "Ruta interna", self.property_path, value_span=3
+        )
+        self._property_row(properties, 3, "Tamaño real", self.property_size)
+        self._property_row(
+            properties, 3, "Tamaño almacenado", self.property_packed_size, column=2
+        )
+        self._property_row(
+            properties, 4, "Flags MPQ", self.property_flags, value_span=3
+        )
+        self._property_row(
+            properties, 5, "SHA-256", self.property_sha256, value_span=2
+        )
+        self.hash_button = ttk.Button(
+            properties,
+            text="Calcular SHA-256",
+            command=self._calculate_selected_sha256,
+            state=tk.DISABLED,
+        )
+        self.hash_button.grid(row=5, column=3, sticky=tk.E, padx=(10, 0), pady=1)
         properties.columnconfigure(1, weight=1)
+        properties.columnconfigure(3, weight=1)
 
         footer = ttk.Frame(self.export_tab)
         footer.pack(fill=tk.X, pady=(8, 0))
@@ -210,13 +282,23 @@ class MPQStudioApp:
 
     @staticmethod
     def _property_row(
-        parent: ttk.LabelFrame, row: int, title: str, variable: tk.StringVar
+        parent: ttk.LabelFrame,
+        row: int,
+        title: str,
+        variable: tk.StringVar,
+        *,
+        column: int = 0,
+        value_span: int = 1,
     ) -> None:
         ttk.Label(parent, text=f"{title}:", style="Section.TLabel").grid(
-            row=row, column=0, sticky=tk.W, padx=(0, 10), pady=1
+            row=row, column=column, sticky=tk.W, padx=(0, 10), pady=1
         )
         ttk.Label(parent, textvariable=variable).grid(
-            row=row, column=1, sticky=tk.W, pady=1
+            row=row,
+            column=column + 1,
+            columnspan=value_span,
+            sticky=tk.W,
+            pady=1,
         )
 
     def _build_import_tab(self) -> None:
@@ -304,7 +386,13 @@ class MPQStudioApp:
     def _make_tree(parent: ttk.Widget, columns: tuple[str, ...]) -> ttk.Treeview:
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.BOTH, expand=True)
-        tree = ttk.Treeview(frame, columns=columns, show="tree headings", selectmode="extended")
+        tree = ttk.Treeview(
+            frame,
+            columns=columns,
+            show="tree headings",
+            selectmode="extended",
+            height=7,
+        )
         scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -438,17 +526,58 @@ class MPQStudioApp:
             self.property_source.set(
                 str(self.current_archive) if self.current_archive is not None else "—"
             )
+            self.property_path.set(file.path)
+            self.property_size.set(f"{format_bytes(file.size)} ({file.size:,} bytes)")
+            self.property_packed_size.set(
+                f"{format_bytes(file.packed_size)} ({file.packed_size:,} bytes)"
+            )
+            self.property_flags.set(describe_mpq_flags(file.flags))
+            self.property_sha256.set("Pendiente de calcular")
+            self.hash_button.configure(state=tk.NORMAL)
             return
         self.property_name.set(self.archive_tree.item(node, "text"))
         self.property_type.set("Carpeta")
         self.property_source.set(
             str(self.current_archive) if self.current_archive is not None else "—"
         )
+        self.property_path.set("—")
+        self.property_size.set("—")
+        self.property_packed_size.set("—")
+        self.property_flags.set("—")
+        self.property_sha256.set("—")
+        self.hash_button.configure(state=tk.DISABLED)
+
+    def _calculate_selected_sha256(self) -> None:
+        selection = self.archive_tree.selection()
+        if len(selection) != 1 or self.current_archive is None:
+            return
+        file = self.archive_items.get(selection[0])
+        if file is None:
+            return
+        self.hash_button.configure(state=tk.DISABLED)
+        self.property_sha256.set("Calculando…")
+        self.root.update_idletasks()
+        try:
+            digest = calculate_mpq_sha256(self.current_archive, file.path)
+        except (OSError, MPQError, struct.error) as exc:
+            self.property_sha256.set("No disponible")
+            messagebox.showerror("Error al calcular SHA-256", str(exc), parent=self.root)
+        else:
+            self.property_sha256.set(digest)
+        finally:
+            self.hash_button.configure(state=tk.NORMAL)
 
     def _clear_properties(self) -> None:
         self.property_name.set("Sin selección")
         self.property_type.set("—")
         self.property_source.set("—")
+        self.property_path.set("—")
+        self.property_size.set("—")
+        self.property_packed_size.set("—")
+        self.property_flags.set("—")
+        self.property_sha256.set("—")
+        if hasattr(self, "hash_button"):
+            self.hash_button.configure(state=tk.DISABLED)
 
     def queue_selected(self) -> None:
         if self.current_archive is None:
