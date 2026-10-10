@@ -35,6 +35,12 @@ class PackagingError(RuntimeError):
     """Error seguro y explicable durante el empaquetado."""
 
 
+def is_protected_gluexml(internal_path: str) -> bool:
+    """Indica si una ruta pertenece a la interfaz GlueXML protegida."""
+    normalized = internal_path.replace("/", "\\").lstrip("\\").casefold()
+    return normalized.startswith("interface\\gluexml\\")
+
+
 @dataclass(frozen=True)
 class PatchPlan:
     destination_dir: Path

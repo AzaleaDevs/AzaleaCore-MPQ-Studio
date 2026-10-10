@@ -23,6 +23,10 @@ El programa nunca sobrescribe un parche. Si detecta `patch-8.MPQ`, propone
 `patch-9.MPQ`. Si ya existe la ranura 9, bloquea `patch-10.MPQ` porque el cargador
 de WoW 3.3.5a observado sólo demuestra nombres de un dígito.
 
+Si la selección contiene `Interface\GlueXML`, Studio muestra una advertencia
+visible y la repite antes de crear el MPQ. La prueba local confirmó que el
+cliente original rechaza esos cambios como interfaz de inicio dañada.
+
 ## Principios
 
 - Los archivos originales se abren en modo de solo lectura.

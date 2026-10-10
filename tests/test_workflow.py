@@ -10,6 +10,7 @@ from azaleacore_mpq_studio.mpq import MPQArchive
 from azaleacore_mpq_studio.packer import (
     PackagingError,
     create_and_install_patch,
+    is_protected_gluexml,
     plan_patch,
 )
 from azaleacore_mpq_studio.workspace import (
@@ -24,6 +25,15 @@ HIGHLIGHT = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_gluexml_paths_are_detected_case_insensitively(self) -> None:
+        self.assertTrue(
+            is_protected_gluexml("Interface\\GlueXML\\GlueStrings.lua")
+        )
+        self.assertTrue(is_protected_gluexml("interface/gluexml/Test.xml"))
+        self.assertFalse(
+            is_protected_gluexml("Interface\\WorldMap\\Azeroth\\Map.blp")
+        )
+
     def test_empty_directory_starts_at_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             plan = plan_patch(temporary)
