@@ -189,6 +189,11 @@ class MPQArchive:
             and self.block_table[entry[4]][3] & MPQ_FILE_EXISTS
         }
 
+    @property
+    def active_entry_count(self) -> int:
+        """Número de bloques activos sin necesidad de conocer sus nombres."""
+        return len(self._active_block_indices())
+
     def contains(self, internal_path: str) -> bool:
         return self._find_block_index(internal_path) is not None
 

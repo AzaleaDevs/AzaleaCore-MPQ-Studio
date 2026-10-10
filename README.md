@@ -4,9 +4,24 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La primera versión incluye un lector MPQ de solo lectura y una ventana gráfica
-con selector de archivo y árbol de carpetas expandible. Todavía no extrae ni
-crea archivos MPQ.
+La versión 0.2 incluye un lector MPQ de solo lectura, exportación múltiple con
+rutas conservadas y creación validada de parches mínimos. La aplicación nunca
+edita un MPQ existente.
+
+## Flujo gráfico
+
+1. Seleccionar una carpeta de trabajo. Studio crea `exportar` y `empaquetar`.
+2. En **EXPORTAR**, abrir un MPQ y enviar archivos a la pila con doble clic o `>>`.
+3. Extraer la pila en `exportar`, conservando cada ruta interna.
+4. Copiar a `empaquetar` únicamente los archivos que formarán el nuevo parche.
+5. En **IMPORTAR**, seleccionar archivos concretos o usar `Todo >>`.
+6. Elegir el directorio de instalación y revisar el nombre propuesto.
+7. Confirmar la creación. Studio reabre el MPQ y compara todos sus bytes antes
+   de instalarlo.
+
+El programa nunca sobrescribe un parche. Si detecta `patch-8.MPQ`, propone
+`patch-9.MPQ`. Si ya existe la ranura 9, bloquea `patch-10.MPQ` porque el cargador
+de WoW 3.3.5a observado sólo demuestra nombres de un dígito.
 
 ## Principios
 
