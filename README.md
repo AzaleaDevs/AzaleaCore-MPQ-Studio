@@ -4,14 +4,14 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.11 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.12 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La aplicación nunca
 edita un MPQ existente.
 
 El botón **Acerca de** muestra la versión y el objetivo de la herramienta.
 
-El icono de Windows utiliza el logo de YouTube proporcionado para el proyecto.
+El icono de la ventana y la barra de tareas utiliza el logo de YouTube proporcionado para el proyecto.
 El recurso multirresolución y el PNG original están en `assets/`.
 
 Los errores y avisos usan un cuadro que permite copiar versión, título y detalle

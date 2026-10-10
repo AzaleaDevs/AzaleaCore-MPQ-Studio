@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import struct
+import sys
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +45,7 @@ from .workspace import ExportRequest, Workspace, export_files, prepare_workspace
 
 DEFAULT_DATA_DIR = Path(r"D:\World of Warcraft 3.3.5a\Data")
 APP_ICON_PATH = Path(__file__).resolve().parents[2] / "assets" / "azaleacore-mpq-studio.ico"
+WINDOWS_APP_USER_MODEL_ID = "AzaleaDevs.AzaleaCoreMPQStudio"
 
 
 @dataclass(frozen=True)
@@ -1018,6 +1021,21 @@ def format_bytes(value: int) -> str:
 
 
 def run() -> None:
+    _set_windows_app_user_model_id()
     root = tk.Tk()
     MPQStudioApp(root)
     root.mainloop()
+
+
+def _set_windows_app_user_model_id() -> bool:
+    """Evita que la barra de tareas agrupe la ventana bajo el icono de Python."""
+    if sys.platform != "win32":
+        return False
+    try:
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        set_app_id = shell32.SetCurrentProcessExplicitAppUserModelID
+        set_app_id.argtypes = [ctypes.c_wchar_p]
+        set_app_id.restype = ctypes.c_long
+        return set_app_id(WINDOWS_APP_USER_MODEL_ID) == 0
+    except (AttributeError, OSError):
+        return False

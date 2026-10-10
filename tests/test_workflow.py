@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import struct
+import sys
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from azaleacore_mpq_studio.app import (
     describe_mpq_flags,
     filter_mpq_files,
     format_error_for_clipboard,
+    _set_windows_app_user_model_id,
 )
 from azaleacore_mpq_studio.mpq import (
     MPQ_FILE_COMPRESS,
@@ -41,6 +43,10 @@ APP_ICON = Path(__file__).resolve().parents[1] / "assets" / "azaleacore-mpq-stud
 
 
 class PatchPlanningTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "solo Windows tiene barra de tareas")
+    def test_windows_app_user_model_id_can_be_set(self) -> None:
+        self.assertTrue(_set_windows_app_user_model_id())
+
     def test_application_icon_contains_expected_windows_sizes(self) -> None:
         icon = APP_ICON.read_bytes()
         reserved, resource_type, count = struct.unpack_from("<HHH", icon)
