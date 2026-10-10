@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.15 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.16 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
@@ -57,13 +57,17 @@ propiedades. Para los archivos incluye la ruta interna, los tamaños real y
 almacenado, los flags MPQ y un botón que calcula el SHA-256 bajo demanda sin
 escribir en el archivo original.
 
-El programa nunca sobrescribe un parche. Si detecta `patch-8.MPQ`, propone
-`patch-9.MPQ`. Si ya existe la ranura 9, bloquea `patch-10.MPQ` porque el cargador
-de WoW 3.3.5a observado sólo demuestra nombres de un dígito.
+El programa nunca sobrescribe un parche. Propone los sufijos en orden
+`1`–`9`, `A`–`Z`; por ejemplo, tras `patch-9.MPQ` propone `patch-A.MPQ`, y tras
+`patch-A.MPQ` propone `patch-B.MPQ`. El formato `patch-10.MPQ` no se genera.
+Las pruebas disponibles confirman que el cliente de laboratorio carga el sufijo
+`A`; el siguiente sufijo alfabético debe verificarse en cada instalación.
 
-Si la selección contiene `Interface\GlueXML`, Studio muestra una advertencia
-visible y la repite antes de crear el MPQ. La prueba local confirmó que el
-cliente original rechaza esos cambios como interfaz de inicio dañada.
+Studio permite empaquetar rutas `Interface\GlueXML` sin una alerta emergente.
+Eso no garantiza que cada archivo GlueXML funcione con todos los ejecutables o
+clientes: prueba los cambios en una copia del cliente y conserva una copia de
+seguridad. La edición de cadenas Lua y la sustitución de XML pueden tener
+resultados distintos.
 
 ## Principios
 
@@ -184,7 +188,7 @@ that folder should be included. Review the new MPQ's file list. Adding a
 
 Choose a test installation folder or another separate destination. Studio
 suggests the next available patch filename and will not overwrite an existing
-one. Review the warning and proposed path before confirming. The app creates a
+one. Review the proposed path and file list before confirming. The app creates a
 new MPQ, reopens it, and validates its contents against the input files; it
 also keeps a log and manifest. Test game patches against a copy of the client
 first. Do not use this workflow to alter original MPQs.
@@ -194,9 +198,10 @@ first. Do not use this workflow to alter original MPQs.
 `Ctrl+O` opens an MPQ, `Ctrl+F` focuses search, `Ctrl+E` extracts the queue,
 `F5` refreshes the active tab, and `Delete` removes the selection from a queue.
 Right-click an item for its context menu. If an operation fails, the error
-dialog can copy its details for an issue report. Warnings about
-`Interface\\GlueXML` are intentional: the tested 3.3.5a client rejects these
-custom login-interface files.
+dialog can copy its details for an issue report. Studio permits packaging
+`Interface\\GlueXML` paths without a warning dialog, but does not guarantee
+compatibility with every client executable. Test on a client copy and keep a
+backup; Lua string edits and XML replacements may behave differently.
 
 ## Alcance previsto
 
@@ -239,7 +244,17 @@ avisa del número de entradas cuyo nombre todavía no puede recuperar.
 ## Versión portable para Windows
 
 La carpeta portable se puede copiar y ejecutar en Windows sin instalar Python.
-Para compilarla desde un entorno Windows con Python 3.11 o posterior, ejecuta:
+Para descargar una versión ya compilada, abre la página de
+[Releases de AzaleaCore MPQ Studio](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
+entra en la versión más reciente y descarga el ZIP portable que aparece en
+**Assets**. También puedes usar la
+[descarga directa de la versión 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore%20MPQ%20Studio%200.16.0%20portable.zip).
+Descomprímelo y ejecuta `AzaleaCore MPQ Studio.exe` desde la carpeta extraída;
+no hace falta instalar Python. El ZIP de código fuente de GitHub no es el
+portable compilado.
+
+Para compilar el portable desde el código fuente en Windows con Python 3.11 o
+posterior, ejecuta:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\build_portable.ps1
@@ -249,6 +264,23 @@ La primera compilación crea un entorno virtual local e instala PyInstaller desd
 PyPI; requiere conexión a Internet. El resultado contiene la carpeta completa
 de la aplicación y un ZIP para distribuir. Se compila en Windows porque
 PyInstaller no es un compilador cruzado.
+
+## Download the Windows portable app
+
+To download a prebuilt version, open the
+[AzaleaCore MPQ Studio Releases page](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
+open the latest release, and download the portable ZIP listed under **Assets**.
+You can also use the
+[direct download for version 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore%20MPQ%20Studio%200.16.0%20portable.zip).
+Extract the ZIP and run `AzaleaCore MPQ Studio.exe` from the extracted folder;
+Python does not need to be installed. GitHub's source-code ZIP is not the
+prebuilt portable app.
+
+To build the portable app from source on Windows with Python 3.11 or newer, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build_portable.ps1
+```
 
 ## Seguridad
 

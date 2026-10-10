@@ -14,10 +14,10 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [x] 7. Extraer archivos conservando la ruta interna y generar manifiesto SHA-256.
 - [x] 8. Añadir pestaña IMPORTAR con selección individual, por carpeta o completa.
 - [x] 9. Construir MPQ mínimos, reabrirlos y validar sus archivos byte a byte.
-- [x] 10. Calcular la siguiente ranura segura `patch-1` a `patch-9` sin sobrescribir.
-- [x] 11. Detectar destinos localizados, por ejemplo `patch-esES-N.MPQ`.
-- [x] 12. Bloquear la falsa prioridad de `patch-10.MPQ` en el modo WoW 3.3.5a.
-- [x] 13. Advertir cuando un paquete contiene GlueXML protegido.
+- [x] 10. Calcular sufijos `1`–`9`, `A`–`Z` sin sobrescribir.
+- [x] 11. Detectar destinos localizados, por ejemplo `patch-esES-A.MPQ`.
+- [x] 12. Continuar con `patch-A.MPQ` tras `patch-9.MPQ`; no generar `patch-10.MPQ`.
+- [x] 13. Permitir empaquetar GlueXML sin bloquear ni mostrar alerta emergente.
 
 ## Próximos pasos esenciales
 

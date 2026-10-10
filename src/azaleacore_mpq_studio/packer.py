@@ -23,9 +23,9 @@ from .mpq import (
 
 
 MPQ_HEADER_SIZE = 32
-PATCH_PATTERN = re.compile(r"^patch-(?P<number>[1-9])\.mpq$", re.IGNORECASE)
+PATCH_PATTERN = re.compile(r"^patch-(?P<suffix>[1-9A-Z])\.mpq$", re.IGNORECASE)
 LOCALIZED_PATTERN = re.compile(
-    r"^patch-(?P<locale>[a-z]{2}[A-Z]{2})-(?P<number>[1-9])\.mpq$",
+    r"^patch-(?P<locale>[a-z]{2}[A-Z]{2})-(?P<suffix>[1-9A-Z])\.mpq$",
     re.IGNORECASE,
 )
 LOCALE_DIR_PATTERN = re.compile(r"^[a-z]{2}[A-Z]{2}$")
@@ -35,10 +35,26 @@ class PackagingError(RuntimeError):
     """Error seguro y explicable durante el empaquetado."""
 
 
-def is_protected_gluexml(internal_path: str) -> bool:
-    """Indica si una ruta pertenece a la interfaz GlueXML protegida."""
-    normalized = internal_path.replace("/", "\\").lstrip("\\").casefold()
-    return normalized.startswith("interface\\gluexml\\")
+def _suffix_rank(suffix: str) -> int:
+    """Ordena ranuras numéricas 1-9 y después alfabéticas A-Z."""
+    normalized = suffix.upper()
+    if normalized.isdigit():
+        return int(normalized)
+    return 9 + ord(normalized) - ord("A") + 1
+
+
+def _next_suffix(suffix: str) -> str:
+    normalized = suffix.upper()
+    if normalized.isdigit() and int(normalized) < 9:
+        return str(int(normalized) + 1)
+    if normalized == "9":
+        return "A"
+    if "A" <= normalized < "Z":
+        return chr(ord(normalized) + 1)
+    raise PackagingError(
+        f"{suffix} ya usa el último sufijo compatible (Z). "
+        "No se generará automáticamente un sufijo posterior."
+    )
 
 
 @dataclass(frozen=True)
@@ -80,24 +96,19 @@ def plan_patch(destination_dir: Path | str) -> PatchPlan:
         raise PackagingError("El directorio de destino no existe.")
 
     locale = directory.name if LOCALE_DIR_PATTERN.fullmatch(directory.name) else None
-    entries: list[tuple[int, str]] = []
+    entries: list[tuple[str, str]] = []
     for path in directory.iterdir():
         if not path.is_file():
             continue
         match = LOCALIZED_PATTERN.fullmatch(path.name) if locale else PATCH_PATTERN.fullmatch(path.name)
         if match and (not locale or match.group("locale").casefold() == locale.casefold()):
-            entries.append((int(match.group("number")), path.name))
+            entries.append((match.group("suffix").upper(), path.name))
 
     if entries:
-        highest, previous = max(entries)
-        if highest >= 9:
-            raise PackagingError(
-                f"{previous} ya ocupa la última ranura segura. "
-                "AzaleaCore MPQ Studio no generará patch-10.MPQ automáticamente."
-            )
-        number = highest + 1
+        highest, previous = max(entries, key=lambda item: _suffix_rank(item[0]))
+        suffix = _next_suffix(highest)
         prefix = f"patch-{locale}-" if locale else "patch-"
-        name = f"{prefix}{number}.MPQ"
+        name = f"{prefix}{suffix}.MPQ"
         message = (
             f"En este directorio el parche prioritario más reciente es {previous}. "
             f"Se generará {name}."

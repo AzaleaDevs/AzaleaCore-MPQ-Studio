@@ -29,7 +29,6 @@ from azaleacore_mpq_studio.packer import (
     PackagingError,
     build_mpq,
     create_and_install_patch,
-    is_protected_gluexml,
     plan_patch,
 )
 from azaleacore_mpq_studio.settings import (
@@ -115,17 +114,6 @@ class PatchPlanningTest(unittest.TestCase):
         self.assertEqual(translate_text(english, "es"), spanish)
         self.assertEqual(
             translate_text(
-                "ADVERTENCIA GLUEXML: el cliente WoW 3.3.5a original rechazará "
-                "este parche como interfaz de inicio de sesión dañada. Úsalo sólo "
-                "con un cliente de laboratorio compatible.",
-                "en",
-            ),
-            "GLUEXML WARNING: the original WoW 3.3.5a client will reject this "
-            "patch as a corrupted login interface. Use it only with a compatible "
-            "lab client.",
-        )
-        self.assertEqual(
-            translate_text(
                 "En este directorio no hay parches prioritarios compatibles. "
                 "Se creará patch-1.MPQ como primer parche.",
                 "en",
@@ -184,15 +172,6 @@ class PatchPlanningTest(unittest.TestCase):
         description = describe_mpq_flags(MPQ_FILE_EXISTS | MPQ_FILE_COMPRESS)
         self.assertEqual(description, "0x80000200 · EXISTE | COMPRIMIDO")
 
-    def test_gluexml_paths_are_detected_case_insensitively(self) -> None:
-        self.assertTrue(
-            is_protected_gluexml("Interface\\GlueXML\\GlueStrings.lua")
-        )
-        self.assertTrue(is_protected_gluexml("interface/gluexml/Test.xml"))
-        self.assertFalse(
-            is_protected_gluexml("Interface\\WorldMap\\Azeroth\\Map.blp")
-        )
-
     def test_path_filter_is_instant_style_and_case_insensitive(self) -> None:
         files = (
             MPQFile("Interface\\GlueXML\\GlueStrings.lua", 10, 10, 0),
@@ -217,11 +196,38 @@ class PatchPlanningTest(unittest.TestCase):
             self.assertEqual(plan.patch_name, "patch-9.MPQ")
             self.assertEqual(plan.previous_patch, "patch-8.MPQ")
 
-    def test_patch_ten_is_refused(self) -> None:
+    def test_patch_a_follows_patch_nine(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "patch-9.MPQ").touch()
-            with self.assertRaises(PackagingError):
+            plan = plan_patch(root)
+            self.assertEqual(plan.patch_name, "patch-A.MPQ")
+            self.assertEqual(plan.previous_patch, "patch-9.MPQ")
+
+    def test_patch_letters_advance_and_ignore_patch_ten(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "patch-9.MPQ").touch()
+            (root / "patch-A.MPQ").touch()
+            (root / "patch-10.MPQ").touch()
+            plan = plan_patch(root)
+            self.assertEqual(plan.patch_name, "patch-B.MPQ")
+            self.assertEqual(plan.previous_patch, "patch-A.MPQ")
+
+    def test_localized_patches_advance_from_nine_to_a_and_b(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            locale = Path(temporary) / "esES"
+            locale.mkdir()
+            (locale / "patch-esES-9.MPQ").touch()
+            self.assertEqual(plan_patch(locale).patch_name, "patch-esES-A.MPQ")
+            (locale / "patch-esES-A.MPQ").touch()
+            self.assertEqual(plan_patch(locale).patch_name, "patch-esES-B.MPQ")
+
+    def test_patch_z_is_reported_as_final_supported_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "patch-Z.MPQ").touch()
+            with self.assertRaisesRegex(PackagingError, "último sufijo compatible"):
                 plan_patch(root)
 
     def test_locale_directory_uses_localized_name(self) -> None:

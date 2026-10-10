@@ -33,7 +33,6 @@ from .packer import (
     PackagingError,
     PatchPlan,
     create_and_install_patch,
-    is_protected_gluexml,
     plan_patch,
 )
 from .settings import (
@@ -231,7 +230,6 @@ class MPQStudioApp:
         self.import_status = self._localized_var("Selecciona una carpeta de trabajo.")
         self.destination_text = tk.StringVar(value=self._tr("No seleccionado"))
         self.plan_text = self._localized_var("Selecciona el directorio de destino.")
-        self.glue_warning = self._localized_var()
         self.property_name = tk.StringVar(value=self._tr("Sin selección"))
         self.property_type = self._localized_var("—")
         self.property_source = tk.StringVar(value="—")
@@ -646,14 +644,6 @@ class MPQStudioApp:
             label="Vaciar cola", command=self._clear_package_queue
         )
         self._bind_context_menu(self.package_queue_tree, self.package_queue_menu)
-
-        ttk.Label(
-            self.import_tab,
-            textvariable=self.glue_warning,
-            style="Warning.TLabel",
-            wraplength=1050,
-            justify=tk.LEFT,
-        ).pack(fill=tk.X, pady=(8, 0))
 
         destination = ttk.LabelFrame(
             self.import_tab, text="Directorio de instalación", padding=8
@@ -1190,22 +1180,12 @@ class MPQStudioApp:
 
     def _refresh_package_queue(self) -> None:
         self._clear_tree(self.package_queue_tree)
-        queued_internal_paths: list[str] = []
         if self.workspace is not None:
             for path in sorted(self.package_queue.values(), key=lambda item: str(item).casefold()):
                 internal = path.relative_to(self.workspace.package_dir).as_posix().replace("/", "\\")
-                queued_internal_paths.append(internal)
                 self.package_queue_tree.insert(
                     "", tk.END, text=internal, values=(format_bytes(path.stat().st_size),)
                 )
-        if any(is_protected_gluexml(path) for path in queued_internal_paths):
-            self.glue_warning.set(
-                "ADVERTENCIA GLUEXML: el cliente WoW 3.3.5a original rechazará "
-                "este parche como interfaz de inicio de sesión dañada. Úsalo sólo "
-                "con un cliente de laboratorio compatible."
-            )
-        else:
-            self.glue_warning.set("")
         self._update_actions()
 
     def choose_destination(self) -> None:
@@ -1237,12 +1217,6 @@ class MPQStudioApp:
         summary = "\n".join(internal for internal, _ in visible)
         if len(ordered) > len(visible):
             summary += f"\n... y {len(ordered) - len(visible)} archivo(s) más"
-        glue_notice = ""
-        if any(is_protected_gluexml(internal) for internal, _ in files):
-            glue_notice = (
-                "\n\nADVERTENCIA: la selección contiene Interface\\GlueXML. "
-                "El cliente 3.3.5a original rechazará el parche."
-            )
         listfile_notice = (
             "\n\nSe añadirá un `(listfile)` con las rutas internas del paquete."
             if self.include_listfile.get()
@@ -1251,7 +1225,7 @@ class MPQStudioApp:
         if not self._ask_yesno(
             "Confirmar creación e instalación",
             f"{self.patch_plan.message}\n\nDestino:\n{self.patch_plan.target}\n\n"
-            f"Archivos ({len(files)}):\n{summary}{glue_notice}"
+            f"Archivos ({len(files)}):\n{summary}"
             f"{listfile_notice}"
             "\n\nNo se sobrescribirá ningún MPQ.",
         ):
