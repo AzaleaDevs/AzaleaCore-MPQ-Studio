@@ -10,6 +10,14 @@ from __future__ import annotations
 def known_paths() -> tuple[str, ...]:
     paths = {
         "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp",
+        "Interface\\GlueXML\\AccountLogin.lua",
+        "Interface\\GlueXML\\AccountLogin.xml",
+        "Interface\\GlueXML\\GlueFontStyles.xml",
+        "Interface\\GlueXML\\GlueFonts.xml",
+        "Interface\\GlueXML\\GlueParent.lua",
+        "Interface\\GlueXML\\GlueParent.xml",
+        "Interface\\GlueXML\\GlueStrings.lua",
+        "Interface\\GlueXML\\GlueXML.toc",
         "DBFilesClient\\AreaTable.dbc",
         "DBFilesClient\\WorldMapArea.dbc",
         "DBFilesClient\\WorldMapContinent.dbc",
