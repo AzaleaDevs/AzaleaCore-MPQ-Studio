@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from . import __version__
 from .catalog import known_paths
 from .mpq import (
     MPQ_FILE_COMPRESS,
@@ -163,6 +164,10 @@ class MPQStudioApp:
         ttk.Label(header, text="PARCHE MÍNIMO Y SEGURO", style="Success.TLabel").pack(
             side=tk.RIGHT
         )
+        self.about_button = ttk.Button(
+            header, text="Acerca de", command=self.show_about
+        )
+        self.about_button.pack(side=tk.RIGHT, padx=(0, 10))
 
         workspace_bar = ttk.LabelFrame(outer, text="Carpeta de trabajo", padding=8)
         workspace_bar.pack(fill=tk.X, pady=(0, 10))
@@ -181,6 +186,17 @@ class MPQStudioApp:
         notebook.add(self.import_tab, text="IMPORTAR")
         self._build_export_tab()
         self._build_import_tab()
+
+    def show_about(self) -> None:
+        messagebox.showinfo(
+            "Acerca de AzaleaCore MPQ Studio",
+            f"AzaleaCore MPQ Studio\n"
+            f"Versión {__version__}\n\n"
+            "Herramienta de AzerothCore Labs para explorar, extraer y crear "
+            "archivos MPQ de World of Warcraft 3.3.5a.\n\n"
+            "Los MPQ de origen se abren en modo de solo lectura.",
+            parent=self.root,
+        )
 
     def _build_export_tab(self) -> None:
         chooser = ttk.Frame(self.export_tab)

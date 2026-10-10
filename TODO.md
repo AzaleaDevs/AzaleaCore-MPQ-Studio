@@ -68,7 +68,8 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 46. Añadir barra de progreso y cancelación para operaciones largas.
 - [ ] 47. Mejorar mensajes de error y generar un registro técnico exportable.
 - [ ] 48. Recordar de forma opcional la última carpeta de trabajo.
-- [ ] 49. Crear icono, información de versión y cuadro “Acerca de”.
+- [x] 49a. Mostrar versión e información del proyecto en “Acerca de”.
+- [ ] 49b. Crear icono de aplicación.
 - [ ] 50. Empaquetar una versión portable para Windows.
 - [ ] 51. Probar la versión portable en un equipo sin Python instalado.
 - [ ] 52. Preparar manual de usuario y capturas para AzerothCore Labs.
