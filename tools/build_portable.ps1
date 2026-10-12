@@ -61,6 +61,7 @@ if (Test-Path -LiteralPath $zipPath) {
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller no pudo generar la versión portable." }
 
 Copy-Item -LiteralPath (Join-Path $projectRoot "docs\README-portable.txt") -Destination $bundlePath
+Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination $bundlePath
 Compress-Archive -LiteralPath $bundlePath -DestinationPath $zipPath -CompressionLevel Optimal
 
 Write-Output "Versión portable generada:"

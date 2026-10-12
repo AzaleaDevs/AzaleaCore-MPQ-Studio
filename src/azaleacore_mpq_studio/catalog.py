@@ -12,6 +12,7 @@ def known_paths() -> tuple[str, ...]:
         "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp",
         "Interface\\GlueXML\\AccountLogin.lua",
         "Interface\\GlueXML\\AccountLogin.xml",
+        "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo.blp",
         "Interface\\GlueXML\\GlueFontStyles.xml",
         "Interface\\GlueXML\\GlueFonts.xml",
         "Interface\\GlueXML\\GlueParent.lua",

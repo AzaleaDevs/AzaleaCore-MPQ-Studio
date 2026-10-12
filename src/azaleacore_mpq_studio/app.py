@@ -12,8 +12,28 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
+from .blp import BLPConversionError, prepare_login_logo
 from .catalog import known_paths
 from .i18n import normalize_language, translate_text
+from .login_background import (
+    ACCOUNT_LOGIN_PATH,
+    ACCOUNT_LOGIN_XML_PATH,
+    BACKUP_SUFFIX,
+    LOGO_BACKUP_SUFFIX,
+    LOGIN_MODELS,
+    LoginBackgroundError,
+    apply_login_background,
+    apply_login_customization,
+    apply_custom_login_logo,
+    custom_login_logo_is_active,
+    detect_login_background,
+    detect_hidden_login_logos,
+    detect_centered_wow_logo,
+    find_global_logo_archive,
+    find_login_archives,
+    restore_login_background,
+    restore_custom_login_logo,
+)
 from .mpq import (
     MPQ_FILE_COMPRESS,
     MPQ_FILE_DELETE_MARKER,
@@ -230,6 +250,21 @@ class MPQStudioApp:
         self.import_status = self._localized_var("Selecciona una carpeta de trabajo.")
         self.destination_text = tk.StringVar(value=self._tr("No seleccionado"))
         self.plan_text = self._localized_var("Selecciona el directorio de destino.")
+        self.login_game_root = tk.StringVar(value=str(DEFAULT_DATA_DIR.parent))
+        self.login_archive_text = tk.StringVar(value=self._tr("No detectado"))
+        self.login_background = tk.StringVar(value="northrend")
+        self.hide_blizzard_logo = tk.BooleanVar(value=False)
+        self.hide_rating_logo = tk.BooleanVar(value=False)
+        self.center_wow_logo = tk.BooleanVar(value=False)
+        self.use_custom_wow_logo = tk.BooleanVar(value=False)
+        self.custom_wow_logo_text = tk.StringVar(value=self._tr("No seleccionado"))
+        self.custom_wow_logo_source: Path | None = None
+        self.login_status = self._localized_var(
+            "Selecciona la carpeta del cliente y pulsa Detectar."
+        )
+        self.login_archive: Path | None = None
+        self.login_logo_archive: Path | None = None
+        self.login_logo_archive_text = tk.StringVar(value=self._tr("No detectado"))
         self.property_name = tk.StringVar(value=self._tr("Sin selección"))
         self.property_type = self._localized_var("—")
         self.property_source = tk.StringVar(value="—")
@@ -384,11 +419,15 @@ class MPQStudioApp:
         self.notebook = notebook
         self.export_tab = ttk.Frame(notebook, padding=6)
         self.import_tab = ttk.Frame(notebook, padding=6)
+        self.login_tab = ttk.Frame(notebook, padding=12)
         notebook.add(self.export_tab, text="EXPORTAR")
         notebook.add(self.import_tab, text="IMPORTAR")
+        notebook.add(self.login_tab, text="FONDO LOGIN")
         self._build_export_tab()
         self._build_import_tab()
+        self._build_login_tab()
         self._bind_shortcuts()
+        self.root.after_idle(self.detect_login_archive)
 
     def _bind_shortcuts(self) -> None:
         """Atajos globales de la ventana; los menús de contexto complementan la UI."""
@@ -676,6 +715,379 @@ class MPQStudioApp:
             command=self.create_patch,
         )
         self.import_button.pack(side=tk.RIGHT)
+
+    def _build_login_tab(self) -> None:
+        intro = ttk.Frame(self.login_tab)
+        intro.pack(fill=tk.X, pady=(4, 14))
+        ttk.Label(
+            intro,
+            text="Cambiar el fondo animado del acceso",
+            style="Title.TLabel",
+        ).pack(anchor=tk.W)
+        ttk.Label(
+            intro,
+            text=(
+                "Elige uno de los modelos M2 incluidos en WoW 3.3.5a. Studio conserva "
+                "el resto del MPQ y crea una copia de seguridad antes del primer cambio."
+            ),
+            style="Muted.TLabel",
+            wraplength=920,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(5, 0))
+
+        client = ttk.LabelFrame(self.login_tab, text="Cliente de WoW 3.3.5a", padding=10)
+        client.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(client, textvariable=self.login_game_root).pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
+        )
+        ttk.Button(client, text="Examinar...", command=self.choose_login_game_root).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
+        ttk.Button(client, text="Detectar", command=self.detect_login_archive).pack(
+            side=tk.LEFT
+        )
+
+        detected = ttk.LabelFrame(self.login_tab, text="MPQ efectivo del login", padding=10)
+        detected.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(detected, textvariable=self.login_archive_text).pack(anchor=tk.W)
+        ttk.Label(
+            detected,
+            text=f"Archivo interno: {ACCOUNT_LOGIN_PATH}",
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(
+            detected,
+            textvariable=self.login_logo_archive_text,
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        selection = ttk.LabelFrame(self.login_tab, text="Fondo animado", padding=10)
+        selection.pack(fill=tk.X, pady=(0, 10))
+        options = (
+            ("Classic", "classic", LOGIN_MODELS["classic"]),
+            ("The Burning Crusade", "burning_crusade", LOGIN_MODELS["burning_crusade"]),
+            ("Wrath of the Lich King", "northrend", LOGIN_MODELS["northrend"]),
+        )
+        for row, (label, value, model_path) in enumerate(options):
+            ttk.Radiobutton(
+                selection,
+                text=label,
+                value=value,
+                variable=self.login_background,
+            ).grid(row=row, column=0, sticky=tk.W, pady=3)
+            ttk.Label(selection, text=model_path, style="Muted.TLabel").grid(
+                row=row, column=1, sticky=tk.W, padx=(18, 0), pady=3
+            )
+        selection.columnconfigure(1, weight=1)
+
+        logos = ttk.LabelFrame(self.login_tab, text="Elementos de marca", padding=10)
+        logos.pack(fill=tk.X, pady=(0, 10))
+        ttk.Checkbutton(
+            logos,
+            text="Ocultar logo de Blizzard",
+            variable=self.hide_blizzard_logo,
+        ).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(
+            logos,
+            text="Ocultar clasificación PEGI",
+            variable=self.hide_rating_logo,
+        ).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(
+            logos,
+            text="Centrar logo de WoW sobre el acceso",
+            variable=self.center_wow_logo,
+        ).pack(anchor=tk.W, pady=2)
+        custom_logo = ttk.Frame(logos)
+        custom_logo.pack(fill=tk.X, pady=(2, 0))
+        ttk.Checkbutton(
+            custom_logo,
+            text="Usar logo personalizado",
+            variable=self.use_custom_wow_logo,
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            custom_logo,
+            text="Elegir PNG/BLP...",
+            command=self.choose_custom_wow_logo,
+        ).pack(side=tk.RIGHT)
+        ttk.Label(
+            custom_logo,
+            textvariable=self.custom_wow_logo_text,
+            style="Muted.TLabel",
+        ).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=10)
+        ttk.Label(
+            logos,
+            text=(
+                "Los objetos permanecen definidos para mantener la compatibilidad; "
+                "Studio los vuelve transparentes."
+            ),
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(5, 0))
+
+        actions = ttk.Frame(self.login_tab)
+        actions.pack(fill=tk.X, pady=(4, 0))
+        ttk.Label(actions, textvariable=self.login_status, style="Muted.TLabel").pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        self.login_restore_button = ttk.Button(
+            actions,
+            text="Restaurar copia",
+            command=self.restore_login_archive,
+            state=tk.DISABLED,
+        )
+        self.login_restore_button.pack(side=tk.RIGHT, padx=(8, 0))
+        self.login_apply_button = ttk.Button(
+            actions,
+            text="Aplicar fondo",
+            command=self.apply_selected_login_background,
+            state=tk.DISABLED,
+        )
+        self.login_apply_button.pack(side=tk.RIGHT)
+
+    def choose_login_game_root(self) -> None:
+        selected = filedialog.askdirectory(
+            parent=self.root,
+            title=self._tr("Seleccionar cliente de WoW 3.3.5a"),
+            initialdir=self.login_game_root.get() or str(Path.cwd()),
+        )
+        if selected:
+            self.login_game_root.set(selected)
+            self.detect_login_archive()
+
+    def choose_custom_wow_logo(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._tr("Seleccionar logo personalizado"),
+            filetypes=(
+                (self._tr("Imágenes compatibles"), "*.png *.blp *.jpg *.jpeg *.webp *.tga *.bmp"),
+                ("PNG", "*.png"),
+                ("BLP", "*.blp"),
+                (self._tr("Todos los archivos"), "*.*"),
+            ),
+        )
+        if selected:
+            self.custom_wow_logo_source = Path(selected)
+            self.custom_wow_logo_text.set(selected)
+            self.use_custom_wow_logo.set(True)
+
+    def detect_login_archive(self) -> None:
+        root = Path(self.login_game_root.get().strip() or ".")
+        archives = find_login_archives(root)
+        if not archives:
+            self.login_archive = None
+            self.login_logo_archive = None
+            self.login_archive_text.set(self._tr("No detectado"))
+            self.login_logo_archive_text.set(self._tr("MPQ gráfico no detectado"))
+            self.login_status.set(
+                "No se encontró un patch de locale 3 que contenga AccountLogin.lua."
+            )
+            self._update_login_actions()
+            return
+
+        preferred = next(
+            (path for path in archives if path.parent.name.casefold() == "eses"),
+            archives[0],
+        )
+        self.login_archive = preferred
+        self.login_logo_archive = find_global_logo_archive(root)
+        self.login_archive_text.set(str(preferred))
+        self.login_logo_archive_text.set(
+            f"MPQ gráfico: {self.login_logo_archive}"
+            if self.login_logo_archive is not None
+            else self._tr("MPQ gráfico no detectado")
+        )
+        try:
+            with MPQArchive(preferred) as archive:
+                payload = archive.read_file(ACCOUNT_LOGIN_PATH)
+                xml_payload = archive.read_file(ACCOUNT_LOGIN_XML_PATH)
+            detected = detect_login_background(payload) if payload is not None else None
+            hidden_logos = (
+                detect_hidden_login_logos(xml_payload)
+                if xml_payload is not None
+                else (False, False)
+            )
+            centered_wow_logo = (
+                detect_centered_wow_logo(xml_payload)
+                if xml_payload is not None
+                else False
+            )
+            custom_wow_logo = bool(
+                self.login_logo_archive is not None
+                and custom_login_logo_is_active(self.login_logo_archive)
+            )
+        except (OSError, MPQError, LoginBackgroundError) as exc:
+            self.login_status.set(f"No se pudo inspeccionar el fondo actual: {exc}")
+        else:
+            labels = {
+                "classic": "Classic",
+                "burning_crusade": "The Burning Crusade",
+                "northrend": "Wrath of the Lich King",
+            }
+            if detected:
+                self.login_background.set(detected)
+                self.login_status.set(f"Fondo actual detectado: {labels[detected]}.")
+            else:
+                self.login_status.set("MPQ detectado; el fondo actual es personalizado o ambiguo.")
+            self.hide_blizzard_logo.set(hidden_logos[0])
+            self.hide_rating_logo.set(hidden_logos[1])
+            self.center_wow_logo.set(centered_wow_logo)
+            self.use_custom_wow_logo.set(custom_wow_logo)
+            self.custom_wow_logo_source = None
+            self.custom_wow_logo_text.set(
+                self._tr("Instalado dentro del MPQ")
+                if custom_wow_logo
+                else self._tr("No seleccionado")
+            )
+        self._update_login_actions()
+
+    def apply_selected_login_background(self) -> None:
+        if self.login_archive is None:
+            return
+        label = {
+            "classic": "Classic",
+            "burning_crusade": "The Burning Crusade",
+            "northrend": "Wrath of the Lich King",
+        }[self.login_background.get()]
+        backup = self.login_archive.with_name(self.login_archive.name + BACKUP_SUFFIX)
+        logo_changes = []
+        if self.hide_blizzard_logo.get():
+            logo_changes.append("ocultar logo de Blizzard")
+        if self.hide_rating_logo.get():
+            logo_changes.append("ocultar clasificación PEGI")
+        if self.center_wow_logo.get():
+            logo_changes.append("centrar logo de WoW")
+        if self.use_custom_wow_logo.get():
+            logo_changes.append("usar logo personalizado")
+        logo_summary = ", ".join(logo_changes) if logo_changes else "mostrar ambos logotipos"
+        custom_logo_payload = None
+        if self.use_custom_wow_logo.get() and self.custom_wow_logo_source is not None:
+            try:
+                custom_logo_payload = prepare_login_logo(self.custom_wow_logo_source)
+            except (OSError, BLPConversionError) as exc:
+                self._show_error("No se pudo preparar el logo", str(exc))
+                return
+        if (
+            self.use_custom_wow_logo.get()
+            and custom_logo_payload is None
+            and not (
+                self.login_logo_archive is not None
+                and custom_login_logo_is_active(self.login_logo_archive)
+            )
+        ):
+            self._show_error(
+                "No se pudo preparar el logo",
+                "Elige primero un archivo PNG o BLP para el logo personalizado.",
+            )
+            return
+        logo_backup = (
+            self.login_logo_archive.with_name(
+                self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
+            )
+            if self.login_logo_archive is not None
+            else None
+        )
+        if not self._ask_yesno(
+            "Confirmar cambio del fondo",
+            f"Se aplicará el fondo {label} en:\n{self.login_archive}\n\n"
+            f"Elementos de marca: {logo_summary}.\n\n"
+            f"La copia de seguridad es:\n{backup}\n\n"
+            f"MPQ gráfico: {self.login_logo_archive or 'no detectado'}\n"
+            f"Copia gráfica: {logo_backup or 'no disponible'}\n\n"
+            "Wow.exe debe estar cerrado.",
+        ):
+            return
+        try:
+            result = apply_login_customization(
+                self.login_archive,
+                self.login_background.get(),
+                hide_blizzard_logo=self.hide_blizzard_logo.get(),
+                hide_rating_logo=self.hide_rating_logo.get(),
+                center_wow_logo=self.center_wow_logo.get(),
+            )
+            if self.use_custom_wow_logo.get():
+                if self.login_logo_archive is None:
+                    raise LoginBackgroundError(
+                        "No se encontró Data\\patch-9.MPQ para instalar la textura."
+                    )
+                if custom_logo_payload is not None:
+                    apply_custom_login_logo(
+                        self.login_logo_archive, custom_logo_payload
+                    )
+            elif (
+                self.login_logo_archive is not None
+                and custom_login_logo_is_active(self.login_logo_archive)
+            ):
+                restore_custom_login_logo(self.login_logo_archive)
+        except (OSError, MPQError, LoginBackgroundError) as exc:
+            self._show_error("No se pudo cambiar el fondo", str(exc))
+            return
+        self.login_status.set(f"Fondo aplicado: {label}.")
+        self._show_info(
+            "Fondo del login actualizado",
+            f"Modelo aplicado:\n{result.model_path}\n\n"
+            f"Logo de Blizzard oculto: {'sí' if result.hide_blizzard_logo else 'no'}\n"
+            f"Clasificación PEGI oculta: {'sí' if result.hide_rating_logo else 'no'}\n\n"
+            f"Logo de WoW centrado: {'sí' if result.center_wow_logo else 'no'}\n\n"
+            f"Logo personalizado: {'sí' if self.use_custom_wow_logo.get() else 'no'}\n\n"
+            f"Copia de seguridad:\n{result.backup}",
+        )
+        self._update_login_actions()
+
+    def restore_login_archive(self) -> None:
+        if self.login_archive is None:
+            return
+        if not self._ask_yesno(
+            "Restaurar fondo anterior",
+            f"Se restaurará la copia de seguridad sobre:\n{self.login_archive}\n\n"
+            "Wow.exe debe estar cerrado.",
+        ):
+            return
+        try:
+            backup = None
+            if self.login_archive.with_name(
+                self.login_archive.name + BACKUP_SUFFIX
+            ).is_file():
+                backup = restore_login_background(self.login_archive)
+            logo_backup = None
+            if (
+                self.login_logo_archive is not None
+                and self.login_logo_archive.with_name(
+                    self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
+                ).is_file()
+            ):
+                logo_backup = restore_custom_login_logo(self.login_logo_archive)
+        except (OSError, MPQError, LoginBackgroundError) as exc:
+            self._show_error("No se pudo restaurar el fondo", str(exc))
+            return
+        self.login_status.set("Copia de seguridad restaurada.")
+        restored = (
+            f"Fondo restaurado desde:\n{backup}"
+            if backup is not None
+            else "El fondo no tenía una copia pendiente."
+        )
+        if logo_backup is not None:
+            restored += f"\n\nLogo restaurado desde:\n{logo_backup}"
+        self._show_info("Fondo restaurado", restored)
+        self.detect_login_archive()
+
+    def _update_login_actions(self) -> None:
+        available = self.login_archive is not None and self.login_archive.is_file()
+        self.login_apply_button.configure(state=tk.NORMAL if available else tk.DISABLED)
+        background_backup = bool(
+            available
+            and self.login_archive is not None
+            and self.login_archive.with_name(
+                self.login_archive.name + BACKUP_SUFFIX
+            ).is_file()
+        )
+        logo_backup = bool(
+            self.login_logo_archive is not None
+            and self.login_logo_archive.with_name(
+                self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
+            ).is_file()
+        )
+        self.login_restore_button.configure(
+            state=tk.NORMAL if background_backup or logo_backup else tk.DISABLED
+        )
 
     @staticmethod
     def _make_tree(parent: ttk.Widget, columns: tuple[str, ...]) -> ttk.Treeview:

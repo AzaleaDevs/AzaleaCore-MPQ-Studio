@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from azaleacore_mpq_studio.app import (
     calculate_mpq_sha256,
     describe_mpq_flags,
@@ -18,6 +20,28 @@ from azaleacore_mpq_studio.app import (
     _set_windows_app_user_model_id,
 )
 from azaleacore_mpq_studio.i18n import normalize_language, translate_text
+from azaleacore_mpq_studio.blp import rgba_to_blp2, validate_blp
+from azaleacore_mpq_studio.login_background import (
+    ACCOUNT_LOGIN_PATH,
+    ACCOUNT_LOGIN_XML_PATH,
+    BACKUP_SUFFIX,
+    WOW_LOGO_TEXTURE_PATH,
+    LOGIN_MODELS,
+    apply_custom_login_logo,
+    apply_login_background,
+    apply_login_customization,
+    clone_mpq_replacing_file,
+    detect_login_background,
+    detect_hidden_login_logos,
+    detect_centered_wow_logo,
+    custom_login_logo_is_active,
+    find_global_logo_archive,
+    find_login_archives,
+    restore_login_background,
+    restore_custom_login_logo,
+    rewrite_account_login,
+    rewrite_account_login_xml,
+)
 from azaleacore_mpq_studio.mpq import (
     MPQ_FILE_COMPRESS,
     MPQ_FILE_EXISTS,
@@ -50,6 +74,180 @@ APP_ICON = Path(__file__).resolve().parents[1] / "assets" / "azaleacore-mpq-stud
 
 
 class PatchPlanningTest(unittest.TestCase):
+    def test_rewrite_account_login_supports_original_classic_and_wrath_branches(self) -> None:
+        original = (
+            b'AccountLogin:SetModel("Interface\\\\Glues\\\\Models\\\\UI_MainMenu\\\\UI_MainMenu.m2")\r\n'
+            b'AccountLogin:SetModel("Interface\\\\Glues\\\\Models\\\\UI_MainMenu_Northrend\\\\UI_MainMenu_Northrend.m2")\r\n'
+        )
+        updated = rewrite_account_login(original, "burning_crusade")
+        expected = LOGIN_MODELS["burning_crusade"].replace("\\", "\\\\").encode()
+        self.assertEqual(updated.count(expected), 2)
+        self.assertEqual(detect_login_background(updated), "burning_crusade")
+
+    def test_clone_replaces_one_file_and_preserves_other_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.MPQ"
+            destination = root / "destination.MPQ"
+            build_mpq(
+                [
+                    (ACCOUNT_LOGIN_PATH, b'AccountLogin:SetModel("old.m2")'),
+                    ("Interface\\Demo\\keep.bin", b"keep me"),
+                ],
+                source,
+            )
+            clone_mpq_replacing_file(
+                source,
+                destination,
+                ACCOUNT_LOGIN_PATH,
+                b'AccountLogin:SetModel("new.m2")',
+            )
+            with MPQArchive(destination) as archive:
+                self.assertEqual(archive.active_entry_count, 2)
+                self.assertEqual(
+                    archive.read_file(ACCOUNT_LOGIN_PATH),
+                    b'AccountLogin:SetModel("new.m2")',
+                )
+                self.assertEqual(
+                    archive.read_file("Interface\\Demo\\keep.bin"), b"keep me"
+                )
+
+    def test_login_logos_can_be_hidden_and_shown_without_removing_objects(self) -> None:
+        original = (
+            b'<Texture file="Interface\\Glues\\Mainmenu\\Glues-BlizzardLogo">\r\n'
+            b'<Texture name="WorldOfWarcraftRating" hidden="true">\r\n'
+            b'<Texture name="AccountLoginLogo">\r\n'
+            b'  <Anchors><Anchor point="TOPLEFT"><Offset>'
+            b'<AbsDimension x="3" y="-7"/></Offset></Anchor></Anchors>\r\n'
+            b'</Texture>\r\n'
+        )
+        hidden = rewrite_account_login_xml(
+            original,
+            hide_blizzard_logo=True,
+            hide_rating_logo=True,
+            center_wow_logo=True,
+        )
+        self.assertEqual(detect_hidden_login_logos(hidden), (True, True))
+        self.assertTrue(detect_centered_wow_logo(hidden))
+        self.assertIn(
+            b'file="Interface\\Glues\\Common\\Glues-WoW-WotLKLogo"', hidden
+        )
+        self.assertIn(b"Glues-BlizzardLogo", hidden)
+        self.assertIn(b"WorldOfWarcraftRating", hidden)
+        self.assertIn(b'point="CENTER"', hidden)
+        self.assertIn(b'x="0" y="90"', hidden)
+
+        visible = rewrite_account_login_xml(
+            hidden,
+            hide_blizzard_logo=False,
+            hide_rating_logo=False,
+            center_wow_logo=False,
+        )
+        self.assertEqual(detect_hidden_login_logos(visible), (False, False))
+        self.assertFalse(detect_centered_wow_logo(visible))
+        self.assertIn(b'point="TOPLEFT"', visible)
+        self.assertIn(b'x="3" y="-7"', visible)
+        self.assertIn(b'hidden="true"', visible)
+
+    def test_customization_updates_lua_and_xml_together(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_path = root / "patch-esES-3.MPQ"
+            lua = b'AccountLogin:SetModel("Interface\\\\Glues\\\\Models\\\\UI_MainMenu\\\\UI_MainMenu.m2")'
+            xml = (
+                b'<Texture file="Interface\\Glues\\Mainmenu\\Glues-BlizzardLogo">\n'
+                b'<Texture name="WorldOfWarcraftRating" hidden="true">\n'
+                b'<Texture name="AccountLoginLogo">\n'
+                b' <Anchors><Anchor point="TOPLEFT"><Offset>'
+                b'<AbsDimension x="3" y="-7"/></Offset></Anchor></Anchors>\n'
+                b'</Texture>\n'
+            )
+            build_mpq(
+                [(ACCOUNT_LOGIN_PATH, lua), (ACCOUNT_LOGIN_XML_PATH, xml)],
+                archive_path,
+            )
+            result = apply_login_customization(
+                archive_path,
+                "northrend",
+                hide_blizzard_logo=True,
+                hide_rating_logo=True,
+                center_wow_logo=True,
+            )
+            self.assertTrue(result.hide_blizzard_logo)
+            self.assertTrue(result.hide_rating_logo)
+            self.assertTrue(result.center_wow_logo)
+            with MPQArchive(archive_path) as archive:
+                self.assertEqual(
+                    detect_login_background(archive.read_file(ACCOUNT_LOGIN_PATH)),
+                    "northrend",
+                )
+                self.assertEqual(
+                    detect_hidden_login_logos(archive.read_file(ACCOUNT_LOGIN_XML_PATH)),
+                    (True, True),
+                )
+                self.assertTrue(
+                    detect_centered_wow_logo(archive.read_file(ACCOUNT_LOGIN_XML_PATH))
+                )
+
+    def test_custom_logo_uses_global_patch_and_restores_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "Data"
+            data.mkdir()
+            archive_path = data / "patch-9.MPQ"
+            build_mpq([("Interface\\Demo\\keep.bin", b"keep")], archive_path)
+            self.assertEqual(find_global_logo_archive(root), archive_path)
+            backup = apply_custom_login_logo(archive_path, b"custom-blp-payload")
+            self.assertTrue(backup.is_file())
+            self.assertTrue(custom_login_logo_is_active(archive_path))
+            with MPQArchive(archive_path) as archive:
+                self.assertEqual(
+                    archive.read_file(WOW_LOGO_TEXTURE_PATH),
+                    b"custom-blp-payload",
+                )
+                self.assertEqual(
+                    archive.read_file("Interface\\Demo\\keep.bin"), b"keep"
+                )
+            restore_custom_login_logo(archive_path)
+            self.assertFalse(custom_login_logo_is_active(archive_path))
+            with MPQArchive(archive_path) as archive:
+                self.assertIsNone(archive.read_file(WOW_LOGO_TEXTURE_PATH))
+
+    def test_png_logo_converts_to_wow_blp2_with_alpha_and_mipmaps(self) -> None:
+        image = Image.new("RGBA", (300, 100), (200, 30, 80, 128))
+        payload = rgba_to_blp2(image)
+        self.assertEqual(validate_blp(payload), (512, 256))
+        self.assertEqual(payload[:4], b"BLP2")
+        self.assertEqual(payload[8:12], bytes((2, 8, 7, 1)))
+        first_offset = struct.unpack_from("<I", payload, 20)[0]
+        first_size = struct.unpack_from("<I", payload, 84)[0]
+        self.assertEqual(first_offset, 1172)
+        self.assertEqual(first_size, 512 * 256)
+
+    def test_apply_detect_and_restore_login_background(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            locale = root / "Data" / "esES"
+            locale.mkdir(parents=True)
+            archive_path = locale / "patch-esES-3.MPQ"
+            original_lua = (
+                b'AccountLogin:SetModel("Interface\\\\Glues\\\\Models\\\\'
+                b'UI_MainMenu_Northrend\\\\UI_MainMenu_Northrend.m2")'
+            )
+            build_mpq([(ACCOUNT_LOGIN_PATH, original_lua)], archive_path)
+
+            self.assertEqual(find_login_archives(root), (archive_path,))
+            result = apply_login_background(archive_path, "classic")
+            self.assertTrue(result.backup.is_file())
+            self.assertEqual(result.backup.name, archive_path.name + BACKUP_SUFFIX)
+            with MPQArchive(archive_path) as archive:
+                changed = archive.read_file(ACCOUNT_LOGIN_PATH)
+            self.assertEqual(detect_login_background(changed), "classic")
+
+            restore_login_background(archive_path)
+            with MPQArchive(archive_path) as archive:
+                self.assertEqual(archive.read_file(ACCOUNT_LOGIN_PATH), original_lua)
+
     @unittest.skipUnless(sys.platform == "win32", "solo Windows tiene barra de tareas")
     def test_windows_app_user_model_id_can_be_set(self) -> None:
         self.assertTrue(_set_windows_app_user_model_id())

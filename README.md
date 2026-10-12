@@ -4,13 +4,39 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.16 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.20 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
-preferencia. La aplicación nunca edita un MPQ existente.
+preferencia. Los flujos genéricos de exportación e importación no editan los
+MPQ de origen; la operación especializada **FONDO LOGIN** sí reemplaza dos MPQ
+de forma controlada, siempre después de crear copias de seguridad restaurables.
 
 El botón **Acerca de** muestra la versión y el objetivo de la herramienta.
+
+La pestaña **FONDO LOGIN** detecta el `patch-<locale>-3.MPQ` efectivo y permite
+cambiar la pantalla animada entre los modelos nativos de Classic, The Burning
+Crusade y Wrath of the Lich King. Antes del primer cambio crea una copia
+`.before-login-background`; el botón **Restaurar copia** permite volver al
+estado anterior. El reemplazo conserva las demás entradas del MPQ, incluidas
+las que no tengan un nombre recuperable en el `(listfile)`. `Wow.exe` debe estar
+cerrado durante la aplicación o restauración.
+
+En la misma pestaña se pueden ocultar por separado el logo de Blizzard y la
+clasificación PEGI. Studio no elimina sus objetos XML: les aplica transparencia
+total para conservar las referencias internas que espera el cliente. El cambio
+del M2, Blizzard y PEGI se valida y se instala como una sola operación atómica.
+La opción **Centrar logo de WoW sobre el acceso** mueve `AccountLoginLogo` desde
+la esquina superior izquierda hasta el centro, encima del formulario. Conserva
+la textura original y solamente cambia su anclaje XML.
+
+La opción **Usar logo personalizado** acepta PNG, JPG, WebP, TGA, BMP o BLP.
+Las imágenes comunes se encajan sin deformación en un lienzo transparente de
+512×256 y se convierten a BLP2 DXT5 con mipmaps. La posición se configura en
+`patch-esES-3.MPQ`, mientras que la textura se instala en `Data\patch-9.MPQ`
+sobre la ruta global que el cliente 3.3.5a carga realmente. Studio conserva una
+copia `.before-login-logo` independiente y **Restaurar copia** recupera ambos
+MPQ.
 
 El icono de la ventana y la barra de tareas utiliza el logo de YouTube proporcionado para el proyecto.
 El recurso multirresolución y el PNG original están en `assets/`.
@@ -79,6 +105,25 @@ resultados distintos.
 
 ## Tutorial de uso (Español)
 
+### Cambiar el fondo animado del login
+
+1. Cierra `Wow.exe`.
+2. Abre **FONDO LOGIN** y selecciona la carpeta raíz del cliente.
+3. Pulsa **Detectar** y comprueba que Studio encuentre el MPQ localizado que
+   contiene `Interface\GlueXML\AccountLogin.lua`.
+4. Elige Classic, The Burning Crusade o Wrath of the Lich King.
+5. Marca **Ocultar logo de Blizzard** y/o **Ocultar clasificación PEGI** si lo
+   deseas.
+6. Marca **Centrar logo de WoW sobre el acceso** si quieres mover el logotipo
+   principal desde la esquina hasta encima del formulario.
+7. Para cambiar su imagen, marca **Usar logo personalizado**, pulsa
+   **Elegir PNG/BLP...** y selecciona tu archivo.
+8. Pulsa **Aplicar fondo** y confirma. Studio crea las copias de seguridad,
+   actualiza el Lua/XML localizado y, si procede, la textura BLP global; después
+   valida los MPQ resultantes.
+9. Usa **Restaurar copia** si quieres recuperar el estado previo al primer
+   cambio realizado por Studio.
+
 ### 1. Iniciar Studio y elegir el idioma
 
 Abre **AzaleaCore MPQ Studio.exe** desde la carpeta portable, o inicia el
@@ -143,6 +188,23 @@ Los avisos sobre `Interface\\GlueXML` son intencionados: el cliente 3.3.5a
 probado rechaza estos archivos de interfaz de login personalizados.
 
 ## User guide (English)
+
+### Change the animated login background
+
+1. Close `Wow.exe`.
+2. Open **LOGIN BACKGROUND** and choose the client root folder.
+3. Click **Detect** and verify that Studio finds the localized MPQ containing
+   `Interface\GlueXML\AccountLogin.lua`.
+4. Choose Classic, The Burning Crusade, or Wrath of the Lich King.
+5. Optionally select **Hide Blizzard logo** and/or **Hide PEGI rating**.
+6. Select **Center WoW logo above the login** to move the main logo from the
+   top-left corner to the center above the form.
+7. To replace its image, select **Use custom logo**, click **Choose PNG/BLP...**,
+   and choose an image.
+8. Click **Apply background** and confirm. Studio creates backups, updates
+   only the login Lua and XML, and validates the resulting MPQ.
+9. Use **Restore backup** to return to the state from before Studio's first
+   change.
 
 ### 1. Start Studio and choose a language
 
@@ -248,7 +310,7 @@ Para descargar una versión ya compilada, abre la página de
 [Releases de AzaleaCore MPQ Studio](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
 entra en la versión más reciente y descarga el ZIP portable que aparece en
 **Assets**. También puedes usar la
-[descarga directa de la versión 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore.MPQ.Studio.0.16.0.portable.zip).
+[descarga directa de la versión 0.20.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.20.0/AzaleaCore.MPQ.Studio.0.20.0.portable.zip).
 Descomprímelo y ejecuta `AzaleaCore MPQ Studio.exe` desde la carpeta extraída;
 no hace falta instalar Python. El ZIP de código fuente de GitHub no es el
 portable compilado.
@@ -271,7 +333,7 @@ To download a prebuilt version, open the
 [AzaleaCore MPQ Studio Releases page](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases),
 open the latest release, and download the portable ZIP listed under **Assets**.
 You can also use the
-[direct download for version 0.16.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.16.0/AzaleaCore.MPQ.Studio.0.16.0.portable.zip).
+[direct download for version 0.20.0](https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio/releases/download/v0.20.0/AzaleaCore.MPQ.Studio.0.20.0.portable.zip).
 Extract the ZIP and run `AzaleaCore MPQ Studio.exe` from the extracted folder;
 Python does not need to be installed. GitHub's source-code ZIP is not the
 prebuilt portable app.

@@ -15,13 +15,14 @@ EXPECTED = "Interface\\WorldMap\\Azeroth\\AzerothHighlight.blp"
 
 @unittest.skipUnless(PATCH9.is_file(), "patch-9.MPQ no está instalado")
 class Patch9IntegrationTest(unittest.TestCase):
-    def test_inventory_identifies_its_only_file(self) -> None:
+    def test_inventory_identifies_original_and_optional_login_logo(self) -> None:
         with MPQArchive(PATCH9) as archive:
             inventory = archive.inventory(known_paths())
 
-        self.assertEqual(inventory.active_entries, 1)
+        paths = [item.path for item in inventory.files]
+        self.assertIn(EXPECTED, paths)
         self.assertEqual(inventory.unknown_entries, 0)
-        self.assertEqual([item.path for item in inventory.files], [EXPECTED])
+        self.assertEqual(inventory.active_entries, len(paths))
 
 
 if __name__ == "__main__":

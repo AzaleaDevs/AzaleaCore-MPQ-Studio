@@ -76,6 +76,10 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 51. Probar la versión portable en un equipo sin Python instalado.
 - [ ] 52. Preparar manual de usuario y capturas para AzerothCore Labs.
 - [x] 53. Añadir selector de idioma español/inglés y documentar el flujo en ambos idiomas.
+- [x] 54. Añadir cambio y restauración segura del fondo M2 del login.
+- [x] 55. Permitir ocultar y restaurar los logotipos de Blizzard y PEGI.
+- [x] 56. Permitir centrar el logo principal de WoW encima del formulario.
+- [x] 57. Convertir e instalar un logo personalizado mediante el parche global.
 
 ## Regla de cierre para cada tarea
 
