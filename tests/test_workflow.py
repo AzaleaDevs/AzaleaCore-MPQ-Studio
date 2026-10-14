@@ -36,6 +36,7 @@ from azaleacore_mpq_studio.login_background import (
     clone_mpq_replacing_file,
     custom_login_music_is_active,
     detect_login_background,
+    detect_login_colors,
     detect_hidden_login_logos,
     detect_centered_wow_logo,
     custom_login_logo_is_active,
@@ -48,6 +49,7 @@ from azaleacore_mpq_studio.login_background import (
     restore_custom_login_logo,
     restore_login_sound_volumes,
     rewrite_account_login,
+    rewrite_account_login_colors,
     rewrite_account_login_xml,
 )
 from azaleacore_mpq_studio.mpq import (
@@ -157,11 +159,50 @@ class PatchPlanningTest(unittest.TestCase):
         self.assertIn(b'x="3" y="-7"', visible)
         self.assertIn(b'hidden="true"', visible)
 
+    def test_login_button_colors_can_be_applied_detected_and_removed(self) -> None:
+        original = (
+            b'AccountLogin:SetModel("old.m2")\r\n'
+            b'function AccountLogin_OnShow(self)\r\n'
+            b'end\r\n'
+        )
+        updated = rewrite_account_login_colors(
+            original,
+            (1.0, 0.08, 0.08),
+            (1.0, 0.95, 0.90),
+        )
+        self.assertEqual(
+            detect_login_colors(updated),
+            ((1.0, 0.08, 0.08), (1.0, 0.95, 0.90)),
+        )
+        self.assertIn(b"texture:SetVertexColor", updated)
+        self.assertIn(b"fontString:SetTextColor", updated)
+        self.assertEqual(
+            rewrite_account_login_colors(updated, None, None),
+            original,
+        )
+
+    def test_login_button_colors_detect_legacy_live_test_block(self) -> None:
+        payload = b"""-- AZALEACORE_LOGIN_COLORS_BEGIN
+function AzaleaApplyLoginColors()
+    texture:SetVertexColor(1.00, 0.08, 0.08);
+    label:SetTextColor(1.00, 0.95, 0.90);
+end
+-- AZALEACORE_LOGIN_COLORS_END
+"""
+        self.assertEqual(
+            detect_login_colors(payload),
+            ((1.0, 0.08, 0.08), (1.0, 0.95, 0.90)),
+        )
+
     def test_customization_updates_lua_and_xml_together(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             archive_path = root / "patch-esES-3.MPQ"
-            lua = b'AccountLogin:SetModel("Interface\\\\Glues\\\\Models\\\\UI_MainMenu\\\\UI_MainMenu.m2")'
+            lua = (
+                b'AccountLogin:SetModel("Interface\\Glues\\Models\\UI_MainMenu\\UI_MainMenu.m2")\r\n'
+                b'function AccountLogin_OnShow(self)\r\n'
+                b'end\r\n'
+            )
             xml = (
                 b'<Texture file="Interface\\Glues\\Mainmenu\\Glues-BlizzardLogo">\n'
                 b'<Texture name="WorldOfWarcraftRating" hidden="true">\n'
@@ -180,6 +221,8 @@ class PatchPlanningTest(unittest.TestCase):
                 hide_blizzard_logo=True,
                 hide_rating_logo=True,
                 center_wow_logo=True,
+                button_color=(0.25, 0.50, 0.75),
+                text_color=(1.0, 0.90, 0.80),
             )
             self.assertTrue(result.hide_blizzard_logo)
             self.assertTrue(result.hide_rating_logo)
@@ -188,6 +231,10 @@ class PatchPlanningTest(unittest.TestCase):
                 self.assertEqual(
                     detect_login_background(archive.read_file(ACCOUNT_LOGIN_PATH)),
                     "northrend",
+                )
+                self.assertEqual(
+                    detect_login_colors(archive.read_file(ACCOUNT_LOGIN_PATH)),
+                    ((0.25, 0.50, 0.75), (1.0, 0.90, 0.80)),
                 )
                 self.assertEqual(
                     detect_hidden_login_logos(archive.read_file(ACCOUNT_LOGIN_XML_PATH)),

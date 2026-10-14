@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import colorsys
 import hashlib
 import struct
 import sys
@@ -32,6 +33,7 @@ from .login_background import (
     custom_login_logo_is_active,
     custom_login_music_is_active,
     detect_login_background,
+    detect_login_colors,
     detect_hidden_login_logos,
     detect_centered_wow_logo,
     find_global_logo_archive,
@@ -244,7 +246,7 @@ class MPQStudioApp:
                 self.root.iconbitmap(str(APP_ICON_PATH))
             except tk.TclError:
                 pass
-        self.root.geometry("1180x840")
+        self.root.geometry("1180x900")
         self.root.minsize(900, 560)
 
         self.settings_path = default_settings_path()
@@ -276,6 +278,20 @@ class MPQStudioApp:
         self.ambience_volume = tk.DoubleVar(value=50.0)
         self.music_volume_text = tk.StringVar(value="50 %")
         self.ambience_volume_text = tk.StringVar(value="50 %")
+        self.use_custom_login_colors = tk.BooleanVar(value=False)
+        self.button_color_r = tk.DoubleVar(value=255)
+        self.button_color_g = tk.DoubleVar(value=255)
+        self.button_color_b = tk.DoubleVar(value=255)
+        self.button_color_saturation = tk.DoubleVar(value=100)
+        self.button_color_brightness = tk.DoubleVar(value=100)
+        self.text_color_r = tk.DoubleVar(value=255)
+        self.text_color_g = tk.DoubleVar(value=199)
+        self.text_color_b = tk.DoubleVar(value=0)
+        self.text_color_saturation = tk.DoubleVar(value=100)
+        self.text_color_brightness = tk.DoubleVar(value=100)
+        self.color_value_texts: dict[str, tk.StringVar] = {}
+        self.button_color_preview: tk.Label | None = None
+        self.text_color_preview: tk.Label | None = None
         self.login_status = self._localized_var(
             "Selecciona la carpeta del cliente y pulsa Detectar."
         )
@@ -735,8 +751,140 @@ class MPQStudioApp:
         )
         self.import_button.pack(side=tk.RIGHT)
 
+    def _color_variables(
+        self, prefix: str
+    ) -> tuple[tk.DoubleVar, tk.DoubleVar, tk.DoubleVar, tk.DoubleVar, tk.DoubleVar]:
+        return (
+            getattr(self, f"{prefix}_color_r"),
+            getattr(self, f"{prefix}_color_g"),
+            getattr(self, f"{prefix}_color_b"),
+            getattr(self, f"{prefix}_color_saturation"),
+            getattr(self, f"{prefix}_color_brightness"),
+        )
+
+    def _effective_login_color(self, prefix: str) -> tuple[float, float, float]:
+        red, green, blue, saturation, brightness = self._color_variables(prefix)
+        rgb = tuple(
+            min(1.0, max(0.0, channel.get() / 255.0))
+            for channel in (red, green, blue)
+        )
+        hue, base_saturation, base_value = colorsys.rgb_to_hsv(*rgb)
+        adjusted = colorsys.hsv_to_rgb(
+            hue,
+            min(1.0, base_saturation * saturation.get() / 100.0),
+            min(1.0, base_value * brightness.get() / 100.0),
+        )
+        return tuple(float(channel) for channel in adjusted)
+
+    @staticmethod
+    def _color_hex(color: tuple[float, float, float]) -> str:
+        channels = tuple(round(min(1.0, max(0.0, value)) * 255) for value in color)
+        return "#{:02X}{:02X}{:02X}".format(*channels)
+
+    def _update_color_previews(self, _value: str | None = None) -> None:
+        button = self._effective_login_color("button")
+        text = self._effective_login_color("text")
+        button_hex = self._color_hex(button)
+        text_hex = self._color_hex(text)
+        for prefix, variables in (
+            ("button", self._color_variables("button")),
+            ("text", self._color_variables("text")),
+        ):
+            for name, variable in zip(
+                ("r", "g", "b", "saturation", "brightness"), variables
+            ):
+                label = self.color_value_texts.get(f"{prefix}_{name}")
+                if label is not None:
+                    label.set(str(round(variable.get())))
+        if self.button_color_preview is not None:
+            self.button_color_preview.configure(
+                text=f"Botón {button_hex}",
+                background=button_hex,
+                foreground=text_hex,
+            )
+        if self.text_color_preview is not None:
+            self.text_color_preview.configure(
+                text=f"Texto {text_hex}",
+                background="#202020",
+                foreground=text_hex,
+            )
+
+    def _set_color_controls(
+        self, prefix: str, color: tuple[float, float, float]
+    ) -> None:
+        variables = self._color_variables(prefix)
+        for variable, channel in zip(variables[:3], color):
+            variable.set(round(channel * 255))
+        variables[3].set(100)
+        variables[4].set(100)
+
+    def _build_color_editor(
+        self, parent: ttk.Frame, title: str, prefix: str
+    ) -> None:
+        panel = ttk.LabelFrame(parent, text=title, padding=8)
+        panel.pack(
+            side=tk.LEFT,
+            fill=tk.BOTH,
+            expand=True,
+            padx=(0, 5) if prefix == "button" else (5, 0),
+        )
+        preview = tk.Label(
+            panel,
+            text="",
+            relief=tk.SUNKEN,
+            height=2,
+            font=("Segoe UI", 10, "bold"),
+        )
+        preview.grid(row=0, column=0, columnspan=3, sticky=tk.EW, pady=(0, 5))
+        if prefix == "button":
+            self.button_color_preview = preview
+        else:
+            self.text_color_preview = preview
+
+        variables = self._color_variables(prefix)
+        rows = (
+            ("R", "r", variables[0], 255),
+            ("G", "g", variables[1], 255),
+            ("B", "b", variables[2], 255),
+            ("Saturación", "saturation", variables[3], 200),
+            ("Brillo", "brightness", variables[4], 200),
+        )
+        for row, (label, key, variable, maximum) in enumerate(rows, start=1):
+            ttk.Label(panel, text=label, width=10).grid(row=row, column=0, sticky=tk.W)
+            ttk.Scale(
+                panel,
+                from_=0,
+                to=maximum,
+                variable=variable,
+                command=self._update_color_previews,
+            ).grid(row=row, column=1, sticky=tk.EW, padx=6)
+            value_text = tk.StringVar(value=str(round(variable.get())))
+            self.color_value_texts[f"{prefix}_{key}"] = value_text
+            ttk.Label(panel, textvariable=value_text, width=4).grid(
+                row=row, column=2, sticky=tk.E
+            )
+        panel.columnconfigure(1, weight=1)
+
     def _build_login_tab(self) -> None:
-        intro = ttk.Frame(self.login_tab)
+        canvas = tk.Canvas(self.login_tab, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            self.login_tab, orient=tk.VERTICAL, command=canvas.yview
+        )
+        content = ttk.Frame(canvas, padding=(0, 0, 8, 0))
+        content_window = canvas.create_window((0, 0), window=content, anchor=tk.NW)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        content.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(content_window, width=event.width),
+        )
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        intro = ttk.Frame(content)
         intro.pack(fill=tk.X, pady=(4, 14))
         ttk.Label(
             intro,
@@ -746,7 +894,7 @@ class MPQStudioApp:
         ttk.Label(
             intro,
             text=(
-                "Configura el modelo M2, la música MP3, los volúmenes y los logotipos. "
+                "Configura el modelo M2, la música MP3, los volúmenes, los colores y los logotipos. "
                 "Studio crea copias de seguridad antes del primer cambio."
             ),
             style="Muted.TLabel",
@@ -754,7 +902,7 @@ class MPQStudioApp:
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(5, 0))
 
-        client = ttk.LabelFrame(self.login_tab, text="Cliente de WoW 3.3.5a", padding=10)
+        client = ttk.LabelFrame(content, text="Cliente de WoW 3.3.5a", padding=10)
         client.pack(fill=tk.X, pady=(0, 10))
         ttk.Entry(client, textvariable=self.login_game_root).pack(
             side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
@@ -766,7 +914,7 @@ class MPQStudioApp:
             side=tk.LEFT
         )
 
-        detected = ttk.LabelFrame(self.login_tab, text="MPQ efectivo del login", padding=10)
+        detected = ttk.LabelFrame(content, text="MPQ efectivo del login", padding=10)
         detected.pack(fill=tk.X, pady=(0, 10))
         ttk.Label(detected, textvariable=self.login_archive_text).pack(anchor=tk.W)
         ttk.Label(
@@ -780,7 +928,7 @@ class MPQStudioApp:
             style="Muted.TLabel",
         ).pack(anchor=tk.W, pady=(4, 0))
 
-        selection = ttk.LabelFrame(self.login_tab, text="Fondo animado", padding=10)
+        selection = ttk.LabelFrame(content, text="Fondo animado", padding=10)
         selection.pack(fill=tk.X, pady=(0, 10))
         options = (
             ("Classic", "classic", LOGIN_MODELS["classic"]),
@@ -799,7 +947,7 @@ class MPQStudioApp:
             )
         selection.columnconfigure(1, weight=1)
 
-        audio = ttk.LabelFrame(self.login_tab, text="Música y ambiente", padding=10)
+        audio = ttk.LabelFrame(content, text="Música y ambiente", padding=10)
         audio.pack(fill=tk.X, pady=(0, 10))
         music_file = ttk.Frame(audio)
         music_file.pack(fill=tk.X)
@@ -850,7 +998,30 @@ class MPQStudioApp:
         )
         volume_grid.columnconfigure(1, weight=1)
 
-        logos = ttk.LabelFrame(self.login_tab, text="Elementos de marca", padding=10)
+        colors = ttk.LabelFrame(
+            content, text="Colores de los botones", padding=10
+        )
+        colors.pack(fill=tk.X, pady=(0, 10))
+        ttk.Checkbutton(
+            colors,
+            text="Usar colores personalizados",
+            variable=self.use_custom_login_colors,
+        ).pack(anchor=tk.W)
+        ttk.Label(
+            colors,
+            text=(
+                "RGB define el tono base; Saturación y Brillo ajustan el resultado "
+                "que aparece en la vista previa."
+            ),
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(2, 6))
+        color_editors = ttk.Frame(colors)
+        color_editors.pack(fill=tk.X)
+        self._build_color_editor(color_editors, "Fondo del botón", "button")
+        self._build_color_editor(color_editors, "Texto del botón", "text")
+        self._update_color_previews()
+
+        logos = ttk.LabelFrame(content, text="Elementos de marca", padding=10)
         logos.pack(fill=tk.X, pady=(0, 10))
         ttk.Checkbutton(
             logos,
@@ -993,6 +1164,7 @@ class MPQStudioApp:
                 payload = archive.read_file(ACCOUNT_LOGIN_PATH)
                 xml_payload = archive.read_file(ACCOUNT_LOGIN_XML_PATH)
             detected = detect_login_background(payload) if payload is not None else None
+            login_colors = detect_login_colors(payload) if payload is not None else None
             hidden_logos = (
                 detect_hidden_login_logos(xml_payload)
                 if xml_payload is not None
@@ -1045,6 +1217,15 @@ class MPQStudioApp:
             self.music_volume.set(round(music_volume * 100))
             self.ambience_volume.set(round(ambience_volume * 100))
             self._update_volume_labels()
+            if login_colors is not None:
+                self.use_custom_login_colors.set(True)
+                self._set_color_controls("button", login_colors[0])
+                self._set_color_controls("text", login_colors[1])
+            else:
+                self.use_custom_login_colors.set(False)
+                self._set_color_controls("button", (1.0, 1.0, 1.0))
+                self._set_color_controls("text", (1.0, 199 / 255, 0.0))
+            self._update_color_previews()
         self._update_login_actions()
 
     def apply_selected_login_background(self) -> None:
@@ -1146,13 +1327,30 @@ class MPQStudioApp:
         )
         music_percent = round(self.music_volume.get())
         ambience_percent = round(self.ambience_volume.get())
+        button_color = (
+            self._effective_login_color("button")
+            if self.use_custom_login_colors.get()
+            else None
+        )
+        text_color = (
+            self._effective_login_color("text")
+            if self.use_custom_login_colors.get()
+            else None
+        )
+        color_summary = (
+            f"botón {self._color_hex(button_color)}, "
+            f"texto {self._color_hex(text_color)}"
+            if button_color is not None and text_color is not None
+            else "colores originales"
+        )
         if not self._ask_yesno(
             "Confirmar personalización del login",
             f"Se aplicará el fondo {label} en:\n{self.login_archive}\n\n"
             f"Elementos de marca: {logo_summary}.\n\n"
             f"Música: {music_summary}.\n"
             f"Volumen de música: {music_percent} %.\n"
-            f"Volumen de ambiente: {ambience_percent} %.\n\n"
+            f"Volumen de ambiente: {ambience_percent} %.\n"
+            f"Colores: {color_summary}.\n\n"
             f"Copia del fondo: {backup}\n"
             f"MPQ gráfico: {self.login_logo_archive or 'no detectado'}\n"
             f"Copia gráfica: {logo_backup or 'no disponible'}\n"
@@ -1169,6 +1367,8 @@ class MPQStudioApp:
                 hide_blizzard_logo=self.hide_blizzard_logo.get(),
                 hide_rating_logo=self.hide_rating_logo.get(),
                 center_wow_logo=self.center_wow_logo.get(),
+                button_color=button_color,
+                text_color=text_color,
             )
             if self.use_custom_wow_logo.get():
                 if self.login_logo_archive is None:
@@ -1211,7 +1411,8 @@ class MPQStudioApp:
             f"Logo de WoW centrado: {'sí' if result.center_wow_logo else 'no'}\n"
             f"Logo personalizado: {'sí' if self.use_custom_wow_logo.get() else 'no'}\n"
             f"Música personalizada: {'sí' if self.use_custom_login_music.get() else 'no'}\n"
-            f"Volúmenes: música {music_percent} %, ambiente {ambience_percent} %\n\n"
+            f"Volúmenes: música {music_percent} %, ambiente {ambience_percent} %\n"
+            f"Colores: {color_summary}\n\n"
             f"Copia de seguridad:\n{result.backup}",
         )
         self._update_login_actions()

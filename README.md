@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.20 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.22 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
@@ -45,6 +45,14 @@ efectivo. Studio valida la trama MPEG, conserva una copia
 deslizadores **Música** y **Ambiente** actualizan por separado
 `Sound_MusicVolume` y `Sound_AmbienceVolume` en `WTF\Config.wtf` para el
 siguiente inicio del cliente.
+
+El editor **Colores de los botones** permite elegir por separado el tinte del
+fondo y el color del texto mediante RGB, saturación y brillo, con vista previa
+en vivo. El fondo se aplica como tinte multiplicativo sobre la textura original,
+por lo que mantiene sus bordes, luces y relieve y puede variar ligeramente
+respecto a la muestra plana. Studio detecta los colores instalados; al desmarcar
+**Usar colores personalizados** elimina su bloque y recupera los colores de las
+plantillas originales.
 
 El icono de la ventana y la barra de tareas utiliza el logo de YouTube proporcionado para el proyecto.
 El recurso multirresolución y el PNG original están en `assets/`.
@@ -129,10 +137,12 @@ resultados distintos.
 8. Para cambiar la canción, marca **Usar música MP3 personalizada**, pulsa
    **Elegir MP3...** y selecciona el audio.
 9. Ajusta por separado los deslizadores **Música** y **Ambiente**.
-10. Pulsa **Aplicar personalización** y confirma. Studio crea las copias de
-    seguridad, actualiza Lua/XML, el MP3, los volúmenes y, si procede, la textura
-    BLP global; después valida los MPQ resultantes.
-11. Usa **Restaurar copia** si quieres recuperar el estado previo al primer
+10. Para recolorear los botones, marca **Usar colores personalizados** y ajusta
+    RGB, **Saturación** y **Brillo** tanto para el fondo como para el texto.
+11. Pulsa **Aplicar personalización** y confirma. Studio crea las copias de
+    seguridad, actualiza Lua/XML, colores, MP3, volúmenes y, si procede, la
+    textura BLP global; después valida los MPQ resultantes.
+12. Usa **Restaurar copia** si quieres recuperar el estado previo al primer
     cambio realizado por Studio.
 
 ### 1. Iniciar Studio y elegir el idioma
@@ -215,10 +225,12 @@ probado rechaza estos archivos de interfaz de login personalizados.
 8. To replace the login song, select **Use custom MP3 music**, click
    **Choose MP3...**, and choose the audio file.
 9. Set the **Music** and **Ambience** sliders independently.
-10. Click **Apply customization** and confirm. Studio creates backups, updates
-    Lua/XML, the MP3, volume settings and, when selected, the global BLP texture;
-    it then validates the resulting MPQs.
-11. Use **Restore backup** to return to the state from before Studio's first
+10. To recolor the buttons, select **Use custom colors** and adjust RGB,
+    **Saturation**, and **Brightness** independently for background and text.
+11. Click **Apply customization** and confirm. Studio creates backups, updates
+    Lua/XML, colors, the MP3, volume settings and, when selected, the global BLP
+    texture; it then validates the resulting MPQs.
+12. Use **Restore backup** to return to the state from before Studio's first
     change.
 
 ### 1. Start Studio and choose a language

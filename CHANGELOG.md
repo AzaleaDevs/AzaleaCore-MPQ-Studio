@@ -1,5 +1,23 @@
 # Registro de versiones
 
+## 0.22.0 — 2026-10-14
+
+### Nuevo
+
+- Editor de color independiente para el fondo y el texto de los botones del login.
+- Controles RGB, saturación y brillo con valores numéricos y vista previa en vivo.
+- Detección automática de los colores ya instalados y opción de volver a los
+  colores originales desmarcando la personalización.
+
+### Seguridad y validación
+
+- El tintado conserva las texturas y el relieve originales mediante
+  `SetVertexColor`; no sustituye ni degrada los recursos gráficos.
+- La configuración se escribe en `AccountLogin.lua` dentro de la misma
+  operación atómica y restaurable que el fondo y los elementos de marca.
+- Resultado rojo/blanco cálido verificado visualmente en el cliente real y 33
+  pruebas automáticas superadas.
+
 ## 0.21.0 — 2026-10-14
 
 ### Nuevo

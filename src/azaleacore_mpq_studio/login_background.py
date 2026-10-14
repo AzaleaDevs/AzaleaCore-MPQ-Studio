@@ -50,6 +50,25 @@ LOGIN_MODELS = {
 _SET_MODEL_RE = re.compile(
     r'AccountLogin:SetModel\(\s*["\'][^"\']+["\']\s*\)', re.IGNORECASE
 )
+_COLOR_BLOCK_RE = re.compile(
+    r"-- AZALEACORE_LOGIN_COLORS_BEGIN.*?"
+    r"-- AZALEACORE_LOGIN_COLORS_END(?:\r?\n){0,2}",
+    re.DOTALL,
+)
+_COLOR_CALL_RE = re.compile(
+    r"^[ \t]*AzaleaApplyLoginColors\(\);[ \t]*\r?\n?",
+    re.MULTILINE,
+)
+_COLOR_VALUE_RE = re.compile(
+    r"AZALEA_LOGIN_(BUTTON|TEXT)_COLOR\s*=\s*"
+    r"\{\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\}"
+)
+_LEGACY_BUTTON_COLOR_RE = re.compile(
+    r"texture:SetVertexColor\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)"
+)
+_LEGACY_TEXT_COLOR_RE = re.compile(
+    r"(?:label|fontString):SetTextColor\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)"
+)
 
 
 class LoginBackgroundError(RuntimeError):
@@ -93,6 +112,119 @@ def rewrite_account_login(payload: bytes, background: str) -> bytes:
             "AccountLogin.lua no contiene ninguna llamada AccountLogin:SetModel compatible."
         )
     return bom + updated.encode(encoding)
+
+
+def _validated_color(
+    color: tuple[float, float, float], label: str
+) -> tuple[float, float, float]:
+    if len(color) != 3 or any(not 0.0 <= channel <= 1.0 for channel in color):
+        raise LoginBackgroundError(
+            f"El color de {label} debe contener tres valores entre 0 y 1."
+        )
+    return tuple(float(channel) for channel in color)
+
+
+def rewrite_account_login_colors(
+    payload: bytes,
+    button_color: tuple[float, float, float] | None,
+    text_color: tuple[float, float, float] | None,
+) -> bytes:
+    """Añade o retira el tinte RGB de los botones visibles del login."""
+    if (button_color is None) != (text_color is None):
+        raise LoginBackgroundError(
+            "El color del botón y del texto deben configurarse juntos."
+        )
+    text, encoding, bom = _decode_lua(payload)
+    newline = "\r\n" if "\r\n" in text else "\n"
+    text = _COLOR_CALL_RE.sub("", text)
+    text = _COLOR_BLOCK_RE.sub("", text)
+    if button_color is None:
+        return bom + text.encode(encoding)
+
+    button = _validated_color(button_color, "botón")
+    label = _validated_color(text_color, "texto")
+    marker = "function AccountLogin_OnShow(self)"
+    if marker not in text:
+        raise LoginBackgroundError(
+            "AccountLogin.lua no contiene AccountLogin_OnShow para aplicar colores."
+        )
+    button_values = ", ".join(f"{channel:.3f}" for channel in button)
+    text_values = ", ".join(f"{channel:.3f}" for channel in label)
+    block = f"""-- AZALEACORE_LOGIN_COLORS_BEGIN
+AZALEA_LOGIN_BUTTON_COLOR = {{{button_values}}};
+AZALEA_LOGIN_TEXT_COLOR = {{{text_values}}};
+
+function AzaleaApplyLoginColors()
+    local buttons = {{
+        AccountLoginLoginButton,
+        AccountLoginExitButton,
+        AccountLoginTOSButton,
+        AccountLoginCreditsButton,
+        AccountLoginCinematicsButton,
+        OptionsButton,
+        AccountLoginCommunityButton,
+        AccountLoginManageAccountButton
+    }};
+    for _, button in ipairs(buttons) do
+        if ( button ) then
+            local textures = {{
+                button:GetNormalTexture(),
+                button:GetPushedTexture(),
+                button:GetDisabledTexture(),
+                button:GetHighlightTexture()
+            }};
+            for _, texture in ipairs(textures) do
+                if ( texture ) then
+                    texture:SetVertexColor(
+                        AZALEA_LOGIN_BUTTON_COLOR[1],
+                        AZALEA_LOGIN_BUTTON_COLOR[2],
+                        AZALEA_LOGIN_BUTTON_COLOR[3]
+                    );
+                end
+            end
+            local fontString = button:GetFontString();
+            if ( fontString ) then
+                fontString:SetTextColor(
+                    AZALEA_LOGIN_TEXT_COLOR[1],
+                    AZALEA_LOGIN_TEXT_COLOR[2],
+                    AZALEA_LOGIN_TEXT_COLOR[3]
+                );
+            end
+        end
+    end
+end
+-- AZALEACORE_LOGIN_COLORS_END
+
+"""
+    block = block.replace("\n", newline)
+    text = text.replace(
+        marker,
+        block + marker + newline + "\tAzaleaApplyLoginColors();",
+        1,
+    )
+    return bom + text.encode(encoding)
+
+
+def detect_login_colors(
+    payload: bytes,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    text, _encoding, _bom = _decode_lua(payload)
+    values: dict[str, tuple[float, float, float]] = {}
+    for match in _COLOR_VALUE_RE.finditer(text):
+        values[match.group(1)] = tuple(
+            float(match.group(index)) for index in (2, 3, 4)
+        )
+    if "BUTTON" in values and "TEXT" in values:
+        return values["BUTTON"], values["TEXT"]
+    if "-- AZALEACORE_LOGIN_COLORS_BEGIN" in text:
+        button = _LEGACY_BUTTON_COLOR_RE.search(text)
+        label = _LEGACY_TEXT_COLOR_RE.search(text)
+        if button is not None and label is not None:
+            return (
+                tuple(float(button.group(index)) for index in (1, 2, 3)),
+                tuple(float(label.group(index)) for index in (1, 2, 3)),
+            )
+    return None
 
 
 def detect_login_background(payload: bytes) -> str | None:
@@ -461,6 +593,8 @@ def apply_login_customization(
     hide_blizzard_logo: bool,
     hide_rating_logo: bool,
     center_wow_logo: bool = False,
+    button_color: tuple[float, float, float] | None = None,
+    text_color: tuple[float, float, float] | None = None,
 ) -> LoginBackgroundResult:
     """Aplica fondo y visibilidad de logotipos en una sola sustitución atómica."""
     archive_path = Path(archive).resolve()
@@ -476,6 +610,11 @@ def apply_login_customization(
             "El MPQ no contiene AccountLogin.lua y AccountLogin.xml."
         )
     updated_lua = rewrite_account_login(current_lua, background)
+    updated_lua = rewrite_account_login_colors(
+        updated_lua,
+        button_color,
+        text_color,
+    )
     updated_xml = rewrite_account_login_xml(
         current_xml,
         hide_blizzard_logo=hide_blizzard_logo,
