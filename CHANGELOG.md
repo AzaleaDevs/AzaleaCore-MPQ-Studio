@@ -1,5 +1,15 @@
 # Registro de versiones
 
+## 0.22.1 — 2026-10-14
+
+### Corrección de seguridad
+
+- Nueva opción **Mantener el fondo actual**, que permite cambiar colores,
+  música, volúmenes y logotipos sin reescribir ninguna llamada
+  `AccountLogin:SetModel`.
+- Cuando Studio detecta un M2 personalizado o ambiguo selecciona automáticamente
+  esta opción segura, evitando sustituir fondos comunitarios como Shadowlands.
+
 ## 0.22.0 — 2026-10-14
 
 ### Nuevo

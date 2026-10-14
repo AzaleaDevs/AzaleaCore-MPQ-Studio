@@ -588,7 +588,7 @@ def apply_login_background(archive: Path | str, background: str) -> LoginBackgro
 
 def apply_login_customization(
     archive: Path | str,
-    background: str,
+    background: str | None,
     *,
     hide_blizzard_logo: bool,
     hide_rating_logo: bool,
@@ -609,7 +609,11 @@ def apply_login_customization(
         raise LoginBackgroundError(
             "El MPQ no contiene AccountLogin.lua y AccountLogin.xml."
         )
-    updated_lua = rewrite_account_login(current_lua, background)
+    updated_lua = (
+        current_lua
+        if background is None
+        else rewrite_account_login(current_lua, background)
+    )
     updated_lua = rewrite_account_login_colors(
         updated_lua,
         button_color,
@@ -647,7 +651,11 @@ def apply_login_customization(
     return LoginBackgroundResult(
         archive_path,
         backup,
-        LOGIN_MODELS[background],
+        (
+            LOGIN_MODELS[background]
+            if background is not None
+            else "Sin cambios (se conserva el M2 actual)"
+        ),
         hide_blizzard_logo,
         hide_rating_logo,
         center_wow_logo,

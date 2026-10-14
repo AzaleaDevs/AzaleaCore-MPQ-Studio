@@ -244,6 +244,42 @@ end
                     detect_centered_wow_logo(archive.read_file(ACCOUNT_LOGIN_XML_PATH))
                 )
 
+    def test_customization_can_preserve_a_custom_m2_background(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_path = Path(temporary) / "patch-esES-3.MPQ"
+            custom_model = (
+                b'AccountLogin:SetModel("Interface\\Glues\\Models\\Custom\\Shadowlands.m2")\r\n'
+            )
+            lua = custom_model + b"function AccountLogin_OnShow(self)\r\nend\r\n"
+            xml = (
+                b'<Texture file="Interface\\Glues\\Mainmenu\\Glues-BlizzardLogo">\n'
+                b'<Texture name="WorldOfWarcraftRating" hidden="false">\n'
+                b'<Texture name="AccountLoginLogo">\n'
+                b' <Anchors><Anchor point="TOPLEFT"><Offset>'
+                b'<AbsDimension x="3" y="-7"/></Offset></Anchor></Anchors>\n'
+                b'</Texture>\n'
+            )
+            build_mpq(
+                [(ACCOUNT_LOGIN_PATH, lua), (ACCOUNT_LOGIN_XML_PATH, xml)],
+                archive_path,
+            )
+            result = apply_login_customization(
+                archive_path,
+                None,
+                hide_blizzard_logo=False,
+                hide_rating_logo=False,
+                button_color=(0.8, 0.2, 0.4),
+                text_color=(1.0, 1.0, 1.0),
+            )
+            with MPQArchive(archive_path) as archive:
+                installed = archive.read_file(ACCOUNT_LOGIN_PATH)
+            self.assertIn(custom_model, installed)
+            self.assertEqual(
+                detect_login_colors(installed),
+                ((0.8, 0.2, 0.4), (1.0, 1.0, 1.0)),
+            )
+            self.assertEqual(result.model_path, "Sin cambios (se conserva el M2 actual)")
+
     def test_custom_logo_uses_global_patch_and_restores_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.22 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.22.1 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
@@ -127,7 +127,10 @@ resultados distintos.
 2. Abre **FONDO LOGIN** y selecciona la carpeta raíz del cliente.
 3. Pulsa **Detectar** y comprueba que Studio encuentre el MPQ localizado que
    contiene `Interface\GlueXML\AccountLogin.lua`.
-4. Elige Classic, The Burning Crusade o Wrath of the Lich King.
+4. Elige **Mantener el fondo actual** para conservar cualquier M2 personalizado,
+   o selecciona Classic, The Burning Crusade o Wrath of the Lich King para
+   sustituirlo. Studio selecciona automáticamente la opción segura cuando el
+   fondo detectado es personalizado o ambiguo.
 5. Marca **Ocultar logo de Blizzard** y/o **Ocultar clasificación PEGI** si lo
    deseas.
 6. Marca **Centrar logo de WoW sobre el acceso** si quieres mover el logotipo
@@ -216,7 +219,10 @@ probado rechaza estos archivos de interfaz de login personalizados.
 2. Open **LOGIN BACKGROUND** and choose the client root folder.
 3. Click **Detect** and verify that Studio finds the localized MPQ containing
    `Interface\GlueXML\AccountLogin.lua`.
-4. Choose Classic, The Burning Crusade, or Wrath of the Lich King.
+4. Choose **Keep current background** to preserve any custom M2, or select
+   Classic, The Burning Crusade, or Wrath of the Lich King to replace it. Studio
+   automatically selects the safe option when the detected background is custom
+   or ambiguous.
 5. Optionally select **Hide Blizzard logo** and/or **Hide PEGI rating**.
 6. Select **Center WoW logo above the login** to move the main logo from the
    top-left corner to the center above the form.

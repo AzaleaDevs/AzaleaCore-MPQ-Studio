@@ -264,7 +264,7 @@ class MPQStudioApp:
         self.plan_text = self._localized_var("Selecciona el directorio de destino.")
         self.login_game_root = tk.StringVar(value=str(DEFAULT_DATA_DIR.parent))
         self.login_archive_text = tk.StringVar(value=self._tr("No detectado"))
-        self.login_background = tk.StringVar(value="northrend")
+        self.login_background = tk.StringVar(value="keep_current")
         self.hide_blizzard_logo = tk.BooleanVar(value=False)
         self.hide_rating_logo = tk.BooleanVar(value=False)
         self.center_wow_logo = tk.BooleanVar(value=False)
@@ -931,6 +931,11 @@ class MPQStudioApp:
         selection = ttk.LabelFrame(content, text="Fondo animado", padding=10)
         selection.pack(fill=tk.X, pady=(0, 10))
         options = (
+            (
+                "Mantener el fondo actual",
+                "keep_current",
+                "No modifica ninguna llamada AccountLogin:SetModel",
+            ),
             ("Classic", "classic", LOGIN_MODELS["classic"]),
             ("The Burning Crusade", "burning_crusade", LOGIN_MODELS["burning_crusade"]),
             ("Wrath of the Lich King", "northrend", LOGIN_MODELS["northrend"]),
@@ -1193,10 +1198,16 @@ class MPQStudioApp:
                 "northrend": "Wrath of the Lich King",
             }
             if detected:
-                self.login_background.set(detected)
-                self.login_status.set(f"Fondo actual detectado: {labels[detected]}.")
+                self.login_background.set("keep_current")
+                self.login_status.set(
+                    f"Fondo actual detectado: {labels[detected]}. "
+                    "Se mantendrá salvo que elijas otro explícitamente."
+                )
             else:
-                self.login_status.set("MPQ detectado; el fondo actual es personalizado o ambiguo.")
+                self.login_background.set("keep_current")
+                self.login_status.set(
+                    "Fondo personalizado detectado; se mantendrá sin cambios."
+                )
             self.hide_blizzard_logo.set(hidden_logos[0])
             self.hide_rating_logo.set(hidden_logos[1])
             self.center_wow_logo.set(centered_wow_logo)
@@ -1233,10 +1244,16 @@ class MPQStudioApp:
             return
         root = Path(self.login_game_root.get().strip() or ".")
         label = {
+            "keep_current": "actual (sin cambiar el M2)",
             "classic": "Classic",
             "burning_crusade": "The Burning Crusade",
             "northrend": "Wrath of the Lich King",
         }[self.login_background.get()]
+        selected_background = (
+            None
+            if self.login_background.get() == "keep_current"
+            else self.login_background.get()
+        )
         backup = self.login_archive.with_name(self.login_archive.name + BACKUP_SUFFIX)
         logo_changes = []
         if self.hide_blizzard_logo.get():
@@ -1363,7 +1380,7 @@ class MPQStudioApp:
         try:
             result = apply_login_customization(
                 self.login_archive,
-                self.login_background.get(),
+                selected_background,
                 hide_blizzard_logo=self.hide_blizzard_logo.get(),
                 hide_rating_logo=self.hide_rating_logo.get(),
                 center_wow_logo=self.center_wow_logo.get(),
@@ -1405,7 +1422,7 @@ class MPQStudioApp:
         self.login_status.set(f"Personalización aplicada: {label}.")
         self._show_info(
             "Login actualizado",
-            f"Modelo aplicado:\n{result.model_path}\n\n"
+            f"Modelo M2:\n{result.model_path}\n\n"
             f"Logo de Blizzard oculto: {'sí' if result.hide_blizzard_logo else 'no'}\n"
             f"Clasificación PEGI oculta: {'sí' if result.hide_rating_logo else 'no'}\n"
             f"Logo de WoW centrado: {'sí' if result.center_wow_logo else 'no'}\n"
