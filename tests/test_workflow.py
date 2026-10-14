@@ -25,20 +25,28 @@ from azaleacore_mpq_studio.login_background import (
     ACCOUNT_LOGIN_PATH,
     ACCOUNT_LOGIN_XML_PATH,
     BACKUP_SUFFIX,
+    LOGIN_MUSIC_PATH,
     WOW_LOGO_TEXTURE_PATH,
     LOGIN_MODELS,
     apply_custom_login_logo,
+    apply_custom_login_music,
     apply_login_background,
     apply_login_customization,
+    apply_login_sound_volumes,
     clone_mpq_replacing_file,
+    custom_login_music_is_active,
     detect_login_background,
     detect_hidden_login_logos,
     detect_centered_wow_logo,
     custom_login_logo_is_active,
     find_global_logo_archive,
     find_login_archives,
+    find_login_music_archive,
+    read_login_sound_volumes,
+    restore_custom_login_music,
     restore_login_background,
     restore_custom_login_logo,
+    restore_login_sound_volumes,
     rewrite_account_login,
     rewrite_account_login_xml,
 )
@@ -258,6 +266,46 @@ class PatchPlanningTest(unittest.TestCase):
         self.assertEqual((reserved, resource_type, count), (0, 1, 7))
         dimensions = tuple(icon[6 + index * 16] or 256 for index in range(count))
         self.assertEqual(dimensions, (16, 24, 32, 48, 64, 128, 256))
+
+    def test_custom_login_music_round_trip_and_detection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "Data"
+            data.mkdir()
+            archive_path = data / "patch-9.MPQ"
+            original = b"\xff\xfb\x90\x64" + b"original" * 100
+            replacement = b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\xff\xfb\x90\x64" + b"custom" * 100
+            build_mpq([(LOGIN_MUSIC_PATH, original)], archive_path)
+
+            self.assertEqual(find_login_music_archive(root), archive_path)
+            apply_custom_login_music(archive_path, replacement)
+            self.assertTrue(custom_login_music_is_active(archive_path))
+            with MPQArchive(archive_path) as archive:
+                self.assertEqual(archive.read_file(LOGIN_MUSIC_PATH), replacement)
+
+            restore_custom_login_music(archive_path)
+            with MPQArchive(archive_path) as archive:
+                self.assertEqual(archive.read_file(LOGIN_MUSIC_PATH), original)
+
+    def test_login_sound_volumes_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_dir = root / "WTF"
+            config_dir.mkdir()
+            config = config_dir / "Config.wtf"
+            original = (
+                'SET Sound_MusicVolume "0.10"\\r\\n'
+                'SET Sound_AmbienceVolume "0.20"\\r\\n'
+            ).encode()
+            config.write_bytes(original)
+
+            backup = apply_login_sound_volumes(root, 0.65, 0.35)
+            self.assertTrue(backup.is_file())
+            self.assertEqual(read_login_sound_volumes(root), (0.65, 0.35))
+            self.assertIn('SET Sound_EnableMusic "1"', config.read_text())
+
+            restore_login_sound_volumes(root)
+            self.assertEqual(config.read_bytes(), original)
 
     def test_error_clipboard_report_includes_version_title_and_detail(self) -> None:
         report = format_error_for_clipboard("MPQ inválido", "Tabla incompleta")

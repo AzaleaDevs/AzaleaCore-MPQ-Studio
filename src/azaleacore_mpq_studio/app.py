@@ -20,19 +20,29 @@ from .login_background import (
     ACCOUNT_LOGIN_XML_PATH,
     BACKUP_SUFFIX,
     LOGO_BACKUP_SUFFIX,
+    MUSIC_BACKUP_SUFFIX,
+    SOUND_CONFIG_BACKUP_SUFFIX,
     LOGIN_MODELS,
     LoginBackgroundError,
     apply_login_background,
     apply_login_customization,
     apply_custom_login_logo,
+    apply_custom_login_music,
+    apply_login_sound_volumes,
     custom_login_logo_is_active,
+    custom_login_music_is_active,
     detect_login_background,
     detect_hidden_login_logos,
     detect_centered_wow_logo,
     find_global_logo_archive,
     find_login_archives,
+    find_login_music_archive,
+    read_login_sound_volumes,
     restore_login_background,
     restore_custom_login_logo,
+    restore_custom_login_music,
+    restore_login_sound_volumes,
+    validate_login_music,
 )
 from .mpq import (
     MPQ_FILE_COMPRESS,
@@ -234,7 +244,7 @@ class MPQStudioApp:
                 self.root.iconbitmap(str(APP_ICON_PATH))
             except tk.TclError:
                 pass
-        self.root.geometry("1180x720")
+        self.root.geometry("1180x840")
         self.root.minsize(900, 560)
 
         self.settings_path = default_settings_path()
@@ -259,12 +269,21 @@ class MPQStudioApp:
         self.use_custom_wow_logo = tk.BooleanVar(value=False)
         self.custom_wow_logo_text = tk.StringVar(value=self._tr("No seleccionado"))
         self.custom_wow_logo_source: Path | None = None
+        self.use_custom_login_music = tk.BooleanVar(value=False)
+        self.custom_login_music_text = tk.StringVar(value=self._tr("No seleccionado"))
+        self.custom_login_music_source: Path | None = None
+        self.music_volume = tk.DoubleVar(value=50.0)
+        self.ambience_volume = tk.DoubleVar(value=50.0)
+        self.music_volume_text = tk.StringVar(value="50 %")
+        self.ambience_volume_text = tk.StringVar(value="50 %")
         self.login_status = self._localized_var(
             "Selecciona la carpeta del cliente y pulsa Detectar."
         )
         self.login_archive: Path | None = None
         self.login_logo_archive: Path | None = None
         self.login_logo_archive_text = tk.StringVar(value=self._tr("No detectado"))
+        self.login_music_archive: Path | None = None
+        self.login_music_archive_text = tk.StringVar(value=self._tr("MPQ de música no detectado"))
         self.property_name = tk.StringVar(value=self._tr("Sin selección"))
         self.property_type = self._localized_var("—")
         self.property_source = tk.StringVar(value="—")
@@ -721,14 +740,14 @@ class MPQStudioApp:
         intro.pack(fill=tk.X, pady=(4, 14))
         ttk.Label(
             intro,
-            text="Cambiar el fondo animado del acceso",
+            text="Personalizar la pantalla de acceso",
             style="Title.TLabel",
         ).pack(anchor=tk.W)
         ttk.Label(
             intro,
             text=(
-                "Elige uno de los modelos M2 incluidos en WoW 3.3.5a. Studio conserva "
-                "el resto del MPQ y crea una copia de seguridad antes del primer cambio."
+                "Configura el modelo M2, la música MP3, los volúmenes y los logotipos. "
+                "Studio crea copias de seguridad antes del primer cambio."
             ),
             style="Muted.TLabel",
             wraplength=920,
@@ -779,6 +798,57 @@ class MPQStudioApp:
                 row=row, column=1, sticky=tk.W, padx=(18, 0), pady=3
             )
         selection.columnconfigure(1, weight=1)
+
+        audio = ttk.LabelFrame(self.login_tab, text="Música y ambiente", padding=10)
+        audio.pack(fill=tk.X, pady=(0, 10))
+        music_file = ttk.Frame(audio)
+        music_file.pack(fill=tk.X)
+        ttk.Checkbutton(
+            music_file,
+            text="Usar música MP3 personalizada",
+            variable=self.use_custom_login_music,
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            music_file,
+            text="Elegir MP3...",
+            command=self.choose_custom_login_music,
+        ).pack(side=tk.RIGHT)
+        ttk.Label(
+            music_file,
+            textvariable=self.custom_login_music_text,
+            style="Muted.TLabel",
+        ).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=10)
+        ttk.Label(
+            audio,
+            textvariable=self.login_music_archive_text,
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(4, 5))
+
+        volume_grid = ttk.Frame(audio)
+        volume_grid.pack(fill=tk.X)
+        ttk.Label(volume_grid, text="Música").grid(row=0, column=0, sticky=tk.W)
+        ttk.Scale(
+            volume_grid,
+            from_=0,
+            to=100,
+            variable=self.music_volume,
+            command=self._update_volume_labels,
+        ).grid(row=0, column=1, sticky=tk.EW, padx=8)
+        ttk.Label(volume_grid, textvariable=self.music_volume_text, width=6).grid(
+            row=0, column=2, sticky=tk.E
+        )
+        ttk.Label(volume_grid, text="Ambiente").grid(row=1, column=0, sticky=tk.W)
+        ttk.Scale(
+            volume_grid,
+            from_=0,
+            to=100,
+            variable=self.ambience_volume,
+            command=self._update_volume_labels,
+        ).grid(row=1, column=1, sticky=tk.EW, padx=8)
+        ttk.Label(volume_grid, textvariable=self.ambience_volume_text, width=6).grid(
+            row=1, column=2, sticky=tk.E
+        )
+        volume_grid.columnconfigure(1, weight=1)
 
         logos = ttk.LabelFrame(self.login_tab, text="Elementos de marca", padding=10)
         logos.pack(fill=tk.X, pady=(0, 10))
@@ -837,7 +907,7 @@ class MPQStudioApp:
         self.login_restore_button.pack(side=tk.RIGHT, padx=(8, 0))
         self.login_apply_button = ttk.Button(
             actions,
-            text="Aplicar fondo",
+            text="Aplicar personalización",
             command=self.apply_selected_login_background,
             state=tk.DISABLED,
         )
@@ -852,6 +922,21 @@ class MPQStudioApp:
         if selected:
             self.login_game_root.set(selected)
             self.detect_login_archive()
+
+    def _update_volume_labels(self, _value: str | None = None) -> None:
+        self.music_volume_text.set(f"{round(self.music_volume.get())} %")
+        self.ambience_volume_text.set(f"{round(self.ambience_volume.get())} %")
+
+    def choose_custom_login_music(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._tr("Seleccionar música del login"),
+            filetypes=(("MP3", "*.mp3"), (self._tr("Todos los archivos"), "*.*")),
+        )
+        if selected:
+            self.custom_login_music_source = Path(selected)
+            self.custom_login_music_text.set(selected)
+            self.use_custom_login_music.set(True)
 
     def choose_custom_wow_logo(self) -> None:
         selected = filedialog.askopenfilename(
@@ -875,8 +960,10 @@ class MPQStudioApp:
         if not archives:
             self.login_archive = None
             self.login_logo_archive = None
+            self.login_music_archive = None
             self.login_archive_text.set(self._tr("No detectado"))
             self.login_logo_archive_text.set(self._tr("MPQ gráfico no detectado"))
+            self.login_music_archive_text.set(self._tr("MPQ de música no detectado"))
             self.login_status.set(
                 "No se encontró un patch de locale 3 que contenga AccountLogin.lua."
             )
@@ -889,11 +976,17 @@ class MPQStudioApp:
         )
         self.login_archive = preferred
         self.login_logo_archive = find_global_logo_archive(root)
+        self.login_music_archive = find_login_music_archive(root)
         self.login_archive_text.set(str(preferred))
         self.login_logo_archive_text.set(
             f"MPQ gráfico: {self.login_logo_archive}"
             if self.login_logo_archive is not None
             else self._tr("MPQ gráfico no detectado")
+        )
+        self.login_music_archive_text.set(
+            f"MPQ de música: {self.login_music_archive}"
+            if self.login_music_archive is not None
+            else self._tr("MPQ de música no detectado")
         )
         try:
             with MPQArchive(preferred) as archive:
@@ -914,6 +1007,11 @@ class MPQStudioApp:
                 self.login_logo_archive is not None
                 and custom_login_logo_is_active(self.login_logo_archive)
             )
+            custom_login_music = bool(
+                self.login_music_archive is not None
+                and custom_login_music_is_active(self.login_music_archive)
+            )
+            music_volume, ambience_volume = read_login_sound_volumes(root)
         except (OSError, MPQError, LoginBackgroundError) as exc:
             self.login_status.set(f"No se pudo inspeccionar el fondo actual: {exc}")
         else:
@@ -937,11 +1035,22 @@ class MPQStudioApp:
                 if custom_wow_logo
                 else self._tr("No seleccionado")
             )
+            self.use_custom_login_music.set(custom_login_music)
+            self.custom_login_music_source = None
+            self.custom_login_music_text.set(
+                self._tr("Instalada dentro del MPQ")
+                if custom_login_music
+                else self._tr("No seleccionado")
+            )
+            self.music_volume.set(round(music_volume * 100))
+            self.ambience_volume.set(round(ambience_volume * 100))
+            self._update_volume_labels()
         self._update_login_actions()
 
     def apply_selected_login_background(self) -> None:
         if self.login_archive is None:
             return
+        root = Path(self.login_game_root.get().strip() or ".")
         label = {
             "classic": "Classic",
             "burning_crusade": "The Burning Crusade",
@@ -958,6 +1067,7 @@ class MPQStudioApp:
         if self.use_custom_wow_logo.get():
             logo_changes.append("usar logo personalizado")
         logo_summary = ", ".join(logo_changes) if logo_changes else "mostrar ambos logotipos"
+
         custom_logo_payload = None
         if self.use_custom_wow_logo.get() and self.custom_wow_logo_source is not None:
             try:
@@ -978,6 +1088,39 @@ class MPQStudioApp:
                 "Elige primero un archivo PNG o BLP para el logo personalizado.",
             )
             return
+
+        custom_music_payload = None
+        if (
+            self.use_custom_login_music.get()
+            and self.custom_login_music_source is not None
+        ):
+            try:
+                custom_music_payload = self.custom_login_music_source.read_bytes()
+                validate_login_music(custom_music_payload)
+            except (OSError, LoginBackgroundError) as exc:
+                self._show_error("No se pudo preparar la música", str(exc))
+                return
+        current_custom_music = bool(
+            self.login_music_archive is not None
+            and custom_login_music_is_active(self.login_music_archive)
+        )
+        if (
+            self.use_custom_login_music.get()
+            and custom_music_payload is None
+            and not current_custom_music
+        ):
+            self._show_error(
+                "No se pudo preparar la música",
+                "Elige primero un archivo MP3 para la música del login.",
+            )
+            return
+        if self.use_custom_login_music.get() and self.login_music_archive is None:
+            self._show_error(
+                "No se pudo preparar la música",
+                "No se encontró un MPQ global donde instalar la pista.",
+            )
+            return
+
         logo_backup = (
             self.login_logo_archive.with_name(
                 self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
@@ -985,16 +1128,40 @@ class MPQStudioApp:
             if self.login_logo_archive is not None
             else None
         )
+        music_backup = (
+            self.login_music_archive.with_name(
+                self.login_music_archive.name + MUSIC_BACKUP_SUFFIX
+            )
+            if self.login_music_archive is not None
+            else None
+        )
+        music_summary = (
+            self.custom_login_music_source.name
+            if self.custom_login_music_source is not None
+            else (
+                "mantener la música personalizada instalada"
+                if self.use_custom_login_music.get()
+                else "música original/no modificada"
+            )
+        )
+        music_percent = round(self.music_volume.get())
+        ambience_percent = round(self.ambience_volume.get())
         if not self._ask_yesno(
-            "Confirmar cambio del fondo",
+            "Confirmar personalización del login",
             f"Se aplicará el fondo {label} en:\n{self.login_archive}\n\n"
             f"Elementos de marca: {logo_summary}.\n\n"
-            f"La copia de seguridad es:\n{backup}\n\n"
+            f"Música: {music_summary}.\n"
+            f"Volumen de música: {music_percent} %.\n"
+            f"Volumen de ambiente: {ambience_percent} %.\n\n"
+            f"Copia del fondo: {backup}\n"
             f"MPQ gráfico: {self.login_logo_archive or 'no detectado'}\n"
-            f"Copia gráfica: {logo_backup or 'no disponible'}\n\n"
+            f"Copia gráfica: {logo_backup or 'no disponible'}\n"
+            f"MPQ de música: {self.login_music_archive or 'no detectado'}\n"
+            f"Copia de música: {music_backup or 'no disponible'}\n\n"
             "Wow.exe debe estar cerrado.",
         ):
             return
+
         try:
             result = apply_login_customization(
                 self.login_archive,
@@ -1017,17 +1184,34 @@ class MPQStudioApp:
                 and custom_login_logo_is_active(self.login_logo_archive)
             ):
                 restore_custom_login_logo(self.login_logo_archive)
+
+            if self.use_custom_login_music.get():
+                if custom_music_payload is not None:
+                    apply_custom_login_music(
+                        self.login_music_archive, custom_music_payload
+                    )
+            elif current_custom_music and self.login_music_archive is not None:
+                restore_custom_login_music(self.login_music_archive)
+
+            apply_login_sound_volumes(
+                root,
+                self.music_volume.get() / 100.0,
+                self.ambience_volume.get() / 100.0,
+            )
         except (OSError, MPQError, LoginBackgroundError) as exc:
-            self._show_error("No se pudo cambiar el fondo", str(exc))
+            self._show_error("No se pudo personalizar el login", str(exc))
             return
-        self.login_status.set(f"Fondo aplicado: {label}.")
+
+        self.login_status.set(f"Personalización aplicada: {label}.")
         self._show_info(
-            "Fondo del login actualizado",
+            "Login actualizado",
             f"Modelo aplicado:\n{result.model_path}\n\n"
             f"Logo de Blizzard oculto: {'sí' if result.hide_blizzard_logo else 'no'}\n"
-            f"Clasificación PEGI oculta: {'sí' if result.hide_rating_logo else 'no'}\n\n"
-            f"Logo de WoW centrado: {'sí' if result.center_wow_logo else 'no'}\n\n"
-            f"Logo personalizado: {'sí' if self.use_custom_wow_logo.get() else 'no'}\n\n"
+            f"Clasificación PEGI oculta: {'sí' if result.hide_rating_logo else 'no'}\n"
+            f"Logo de WoW centrado: {'sí' if result.center_wow_logo else 'no'}\n"
+            f"Logo personalizado: {'sí' if self.use_custom_wow_logo.get() else 'no'}\n"
+            f"Música personalizada: {'sí' if self.use_custom_login_music.get() else 'no'}\n"
+            f"Volúmenes: música {music_percent} %, ambiente {ambience_percent} %\n\n"
             f"Copia de seguridad:\n{result.backup}",
         )
         self._update_login_actions()
@@ -1035,38 +1219,57 @@ class MPQStudioApp:
     def restore_login_archive(self) -> None:
         if self.login_archive is None:
             return
+        root = Path(self.login_game_root.get().strip() or ".")
         if not self._ask_yesno(
-            "Restaurar fondo anterior",
-            f"Se restaurará la copia de seguridad sobre:\n{self.login_archive}\n\n"
+            "Restaurar personalización anterior",
+            f"Se restaurarán las copias de seguridad disponibles sobre:\n"
+            f"{self.login_archive}\n\n"
             "Wow.exe debe estar cerrado.",
         ):
             return
         try:
-            backup = None
+            restored_items = []
             if self.login_archive.with_name(
                 self.login_archive.name + BACKUP_SUFFIX
             ).is_file():
-                backup = restore_login_background(self.login_archive)
-            logo_backup = None
+                restored_items.append(
+                    f"Fondo: {restore_login_background(self.login_archive)}"
+                )
             if (
                 self.login_logo_archive is not None
                 and self.login_logo_archive.with_name(
                     self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
                 ).is_file()
             ):
-                logo_backup = restore_custom_login_logo(self.login_logo_archive)
+                restored_items.append(
+                    f"Logo: {restore_custom_login_logo(self.login_logo_archive)}"
+                )
+            if (
+                self.login_music_archive is not None
+                and self.login_music_archive.with_name(
+                    self.login_music_archive.name + MUSIC_BACKUP_SUFFIX
+                ).is_file()
+            ):
+                restored_items.append(
+                    f"Música: {restore_custom_login_music(self.login_music_archive)}"
+                )
+            config = root / "WTF" / "Config.wtf"
+            if config.with_name(
+                config.name + SOUND_CONFIG_BACKUP_SUFFIX
+            ).is_file():
+                restored_items.append(
+                    f"Volúmenes: {restore_login_sound_volumes(root)}"
+                )
         except (OSError, MPQError, LoginBackgroundError) as exc:
-            self._show_error("No se pudo restaurar el fondo", str(exc))
+            self._show_error("No se pudo restaurar el login", str(exc))
             return
-        self.login_status.set("Copia de seguridad restaurada.")
+        self.login_status.set("Copias de seguridad restauradas.")
         restored = (
-            f"Fondo restaurado desde:\n{backup}"
-            if backup is not None
-            else "El fondo no tenía una copia pendiente."
+            "\n\n".join(restored_items)
+            if restored_items
+            else "No había ninguna copia pendiente."
         )
-        if logo_backup is not None:
-            restored += f"\n\nLogo restaurado desde:\n{logo_backup}"
-        self._show_info("Fondo restaurado", restored)
+        self._show_info("Login restaurado", restored)
         self.detect_login_archive()
 
     def _update_login_actions(self) -> None:
@@ -1085,8 +1288,23 @@ class MPQStudioApp:
                 self.login_logo_archive.name + LOGO_BACKUP_SUFFIX
             ).is_file()
         )
+        music_backup = bool(
+            self.login_music_archive is not None
+            and self.login_music_archive.with_name(
+                self.login_music_archive.name + MUSIC_BACKUP_SUFFIX
+            ).is_file()
+        )
+        root = Path(self.login_game_root.get().strip() or ".")
+        config = root / "WTF" / "Config.wtf"
+        audio_backup = config.with_name(
+            config.name + SOUND_CONFIG_BACKUP_SUFFIX
+        ).is_file()
         self.login_restore_button.configure(
-            state=tk.NORMAL if background_backup or logo_backup else tk.DISABLED
+            state=(
+                tk.NORMAL
+                if background_backup or logo_backup or music_backup or audio_backup
+                else tk.DISABLED
+            )
         )
 
     @staticmethod

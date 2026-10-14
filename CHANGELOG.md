@@ -1,5 +1,25 @@
 # Registro de versiones
 
+## 0.21.0 — 2026-10-14
+
+### Nuevo
+
+- Selector de música MP3 personalizada para la pantalla de acceso.
+- Detección del MPQ global efectivo que contiene
+  `Sound\\Music\\GlueScreenMusic\\WotLK_main_title.mp3`.
+- Controles independientes de volumen para música y ambiente, persistidos en
+  `WTF\\Config.wtf` para el siguiente inicio del cliente.
+- Copias de seguridad y restauración conjunta del MP3, los volúmenes, el fondo
+  y los elementos de marca.
+
+### Seguridad y validación
+
+- Validación de cabecera ID3 y tramas MPEG Layer III antes de instalar una
+  canción.
+- Sustitución atómica y comprobación byte a byte del MP3 dentro del MPQ.
+- 31 pruebas automáticas superadas, incluidas instalación/restauración de
+  música y configuración de ambos volúmenes.
+
 ## 0.20.0 — 2026-10-12
 
 ### Nuevo

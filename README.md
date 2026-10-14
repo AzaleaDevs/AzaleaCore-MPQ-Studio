@@ -38,6 +38,14 @@ sobre la ruta global que el cliente 3.3.5a carga realmente. Studio conserva una
 copia `.before-login-logo` independiente y **Restaurar copia** recupera ambos
 MPQ.
 
+La opción **Usar música MP3 personalizada** sustituye de forma segura
+`Sound\Music\GlueScreenMusic\WotLK_main_title.mp3` en el parche global
+efectivo. Studio valida la trama MPEG, conserva una copia
+`.before-login-music` y comprueba el contenido instalado byte a byte. Los
+deslizadores **Música** y **Ambiente** actualizan por separado
+`Sound_MusicVolume` y `Sound_AmbienceVolume` en `WTF\Config.wtf` para el
+siguiente inicio del cliente.
+
 El icono de la ventana y la barra de tareas utiliza el logo de YouTube proporcionado para el proyecto.
 El recurso multirresolución y el PNG original están en `assets/`.
 
@@ -118,11 +126,14 @@ resultados distintos.
    principal desde la esquina hasta encima del formulario.
 7. Para cambiar su imagen, marca **Usar logo personalizado**, pulsa
    **Elegir PNG/BLP...** y selecciona tu archivo.
-8. Pulsa **Aplicar fondo** y confirma. Studio crea las copias de seguridad,
-   actualiza el Lua/XML localizado y, si procede, la textura BLP global; después
-   valida los MPQ resultantes.
-9. Usa **Restaurar copia** si quieres recuperar el estado previo al primer
-   cambio realizado por Studio.
+8. Para cambiar la canción, marca **Usar música MP3 personalizada**, pulsa
+   **Elegir MP3...** y selecciona el audio.
+9. Ajusta por separado los deslizadores **Música** y **Ambiente**.
+10. Pulsa **Aplicar personalización** y confirma. Studio crea las copias de
+    seguridad, actualiza Lua/XML, el MP3, los volúmenes y, si procede, la textura
+    BLP global; después valida los MPQ resultantes.
+11. Usa **Restaurar copia** si quieres recuperar el estado previo al primer
+    cambio realizado por Studio.
 
 ### 1. Iniciar Studio y elegir el idioma
 
@@ -201,10 +212,14 @@ probado rechaza estos archivos de interfaz de login personalizados.
    top-left corner to the center above the form.
 7. To replace its image, select **Use custom logo**, click **Choose PNG/BLP...**,
    and choose an image.
-8. Click **Apply background** and confirm. Studio creates backups, updates
-   only the login Lua and XML, and validates the resulting MPQ.
-9. Use **Restore backup** to return to the state from before Studio's first
-   change.
+8. To replace the login song, select **Use custom MP3 music**, click
+   **Choose MP3...**, and choose the audio file.
+9. Set the **Music** and **Ambience** sliders independently.
+10. Click **Apply customization** and confirm. Studio creates backups, updates
+    Lua/XML, the MP3, volume settings and, when selected, the global BLP texture;
+    it then validates the resulting MPQs.
+11. Use **Restore backup** to return to the state from before Studio's first
+    change.
 
 ### 1. Start Studio and choose a language
 

@@ -26,10 +26,14 @@ ACCOUNT_LOGIN_PATH = "Interface\\GlueXML\\AccountLogin.lua"
 ACCOUNT_LOGIN_XML_PATH = "Interface\\GlueXML\\AccountLogin.xml"
 ORIGINAL_WOW_LOGO_PATH = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo"
 WOW_LOGO_TEXTURE_PATH = ORIGINAL_WOW_LOGO_PATH + ".blp"
+LOGIN_MUSIC_PATH = "Sound\\Music\\GlueScreenMusic\\WotLK_main_title.mp3"
 BACKUP_SUFFIX = ".before-login-background"
 RESTORE_SAFETY_SUFFIX = ".before-login-restore"
 LOGO_BACKUP_SUFFIX = ".before-login-logo"
 LOGO_RESTORE_SAFETY_SUFFIX = ".before-login-logo-restore"
+MUSIC_BACKUP_SUFFIX = ".before-login-music"
+MUSIC_RESTORE_SAFETY_SUFFIX = ".before-login-music-restore"
+SOUND_CONFIG_BACKUP_SUFFIX = ".before-login-audio"
 
 LOGIN_MODELS = {
     "classic": "Interface\\Glues\\Models\\UI_MainMenu\\UI_MainMenu.m2",
@@ -242,6 +246,68 @@ def find_global_logo_archive(game_root: Path | str) -> Path | None:
     """Devuelve el parche global de laboratorio usado para sobrescribir texturas."""
     candidate = Path(game_root).resolve() / "Data" / "patch-9.MPQ"
     return candidate if candidate.is_file() else None
+
+
+def validate_login_music(payload: bytes) -> None:
+    """Comprueba que el contenido incluye al menos una trama MP3 Layer III válida."""
+    if len(payload) < 4:
+        raise LoginBackgroundError("El archivo MP3 está vacío o truncado.")
+    offset = 0
+    if payload.startswith(b"ID3"):
+        if len(payload) < 10 or any(byte & 0x80 for byte in payload[6:10]):
+            raise LoginBackgroundError("La cabecera ID3 del MP3 no es válida.")
+        offset = 10 + sum(
+            byte << shift for byte, shift in zip(payload[6:10], (21, 14, 7, 0))
+        )
+        if payload[5] & 0x10:
+            offset += 10
+    limit = min(len(payload) - 3, offset + 1024 * 1024)
+    for position in range(offset, max(offset, limit)):
+        header = int.from_bytes(payload[position : position + 4], "big")
+        version = (header >> 19) & 0x3
+        layer = (header >> 17) & 0x3
+        bitrate = (header >> 12) & 0xF
+        sample_rate = (header >> 10) & 0x3
+        if (
+            header & 0xFFE00000 == 0xFFE00000
+            and version != 1
+            and layer == 1
+            and bitrate not in (0, 15)
+            and sample_rate != 3
+        ):
+            return
+    raise LoginBackgroundError("No se encontró ninguna trama MP3 Layer III válida.")
+
+
+def find_login_music_archive(game_root: Path | str) -> Path | None:
+    """Localiza el parche global de mayor prioridad que define la música del login."""
+    data = Path(game_root).resolve() / "Data"
+    def priority(path: Path) -> int:
+        match = re.fullmatch(r"patch-([1-9A-Z])\.mpq", path.name, re.IGNORECASE)
+        if match is None:
+            return 0
+        suffix = match.group(1).upper()
+        return int(suffix) if suffix.isdigit() else 10 + ord(suffix) - ord("A")
+
+    candidates = sorted(
+        (
+            path
+            for path in data.iterdir()
+            if path.is_file()
+            and path.suffix.casefold() == ".mpq"
+            and ".before-" not in path.name.casefold()
+        ),
+        key=priority,
+        reverse=True,
+    )
+    for archive_path in candidates:
+        try:
+            with MPQArchive(archive_path) as archive:
+                if archive.contains(LOGIN_MUSIC_PATH):
+                    return archive_path
+        except (OSError, MPQError):
+            continue
+    return find_global_logo_archive(game_root)
 
 
 def clone_mpq_replacing_files(
@@ -508,6 +574,173 @@ def restore_custom_login_logo(archive: Path | str) -> Path:
         raise LoginBackgroundError(
             "No se pudo restaurar el MPQ global. Cierra Wow.exe y vuelve a "
             f"intentarlo. Detalle: {exc}"
+        ) from exc
+    return backup
+
+
+def custom_login_music_is_active(archive: Path | str) -> bool:
+    archive_path = Path(archive).resolve()
+    backup = archive_path.with_name(archive_path.name + MUSIC_BACKUP_SUFFIX)
+    if not archive_path.is_file() or not backup.is_file():
+        return False
+    with MPQArchive(archive_path) as current, MPQArchive(backup) as original:
+        current_music = current.read_file(LOGIN_MUSIC_PATH)
+        original_music = original.read_file(LOGIN_MUSIC_PATH)
+    return current_music is not None and current_music != original_music
+
+
+def apply_custom_login_music(archive: Path | str, payload: bytes) -> Path:
+    """Instala un MP3 de login y conserva el MPQ original."""
+    archive_path = Path(archive).resolve()
+    backup = archive_path.with_name(archive_path.name + MUSIC_BACKUP_SUFFIX)
+    if not archive_path.is_file():
+        raise LoginBackgroundError(f"No existe el MPQ de música: {archive_path}")
+    validate_login_music(payload)
+    if not backup.exists():
+        shutil.copy2(archive_path, backup)
+
+    temporary_dir = Path(
+        tempfile.mkdtemp(prefix="azaleacore-music-", dir=archive_path.parent)
+    )
+    temporary_mpq = temporary_dir / archive_path.name
+    try:
+        clone_mpq_replacing_files(
+            archive_path,
+            temporary_mpq,
+            {LOGIN_MUSIC_PATH: payload},
+            allow_new=True,
+        )
+        os.replace(temporary_mpq, archive_path)
+    except Exception as exc:
+        raise LoginBackgroundError(
+            "No se pudo instalar la música en el MPQ. Cierra Wow.exe y "
+            f"vuelve a intentarlo. Detalle: {exc}"
+        ) from exc
+    finally:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
+    return backup
+
+
+def restore_custom_login_music(archive: Path | str) -> Path:
+    archive_path = Path(archive).resolve()
+    backup = archive_path.with_name(archive_path.name + MUSIC_BACKUP_SUFFIX)
+    if not backup.is_file():
+        raise LoginBackgroundError(f"No existe la copia de la música: {backup}")
+    safety = archive_path.with_name(archive_path.name + MUSIC_RESTORE_SAFETY_SUFFIX)
+    if archive_path.exists() and not safety.exists():
+        shutil.copy2(archive_path, safety)
+    temporary = archive_path.with_name(archive_path.name + ".music-restore.tmp")
+    try:
+        shutil.copy2(backup, temporary)
+        os.replace(temporary, archive_path)
+    except Exception as exc:
+        temporary.unlink(missing_ok=True)
+        raise LoginBackgroundError(
+            "No se pudo restaurar la música. Cierra Wow.exe y vuelve a intentarlo. "
+            f"Detalle: {exc}"
+        ) from exc
+    return backup
+
+
+def _read_text_file(path: Path) -> tuple[str, str, bytes]:
+    payload = path.read_bytes()
+    bom = b"\xef\xbb\xbf" if payload.startswith(b"\xef\xbb\xbf") else b""
+    raw = payload[len(bom) :]
+    for encoding in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding), encoding, bom
+        except UnicodeDecodeError:
+            continue
+    raise LoginBackgroundError(f"No se pudo leer {path}.")
+
+
+def read_login_sound_volumes(game_root: Path | str) -> tuple[float, float]:
+    config = Path(game_root).resolve() / "WTF" / "Config.wtf"
+    if not config.is_file():
+        return 0.5, 0.5
+    text, _encoding, _bom = _read_text_file(config)
+
+    def read_value(name: str, default: float) -> float:
+        match = re.search(
+            rf'^SET\s+{re.escape(name)}\s+"([^"]+)"',
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if match is None:
+            return default
+        try:
+            return min(1.0, max(0.0, float(match.group(1))))
+        except ValueError:
+            return default
+
+    return (
+        read_value("Sound_MusicVolume", 0.5),
+        read_value("Sound_AmbienceVolume", 0.5),
+    )
+
+
+def apply_login_sound_volumes(
+    game_root: Path | str, music_volume: float, ambience_volume: float
+) -> Path:
+    """Guarda ambos volúmenes en Config.wtf para el próximo inicio del cliente."""
+    for name, value in (
+        ("música", music_volume),
+        ("ambiente", ambience_volume),
+    ):
+        if not 0.0 <= value <= 1.0:
+            raise LoginBackgroundError(f"El volumen de {name} debe estar entre 0 y 1.")
+
+    root = Path(game_root).resolve()
+    config = root / "WTF" / "Config.wtf"
+    if not config.is_file():
+        raise LoginBackgroundError(f"No existe la configuración del cliente: {config}")
+    backup = config.with_name(config.name + SOUND_CONFIG_BACKUP_SUFFIX)
+    if not backup.exists():
+        shutil.copy2(config, backup)
+    text, encoding, bom = _read_text_file(config)
+    newline = "\r\n" if "\r\n" in text else "\n"
+
+    def set_value(source: str, name: str, value: str) -> str:
+        pattern = re.compile(
+            rf'^SET\s+{re.escape(name)}\s+"[^"]*"',
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        line = f'SET {name} "{value}"'
+        if pattern.search(source):
+            return pattern.sub(line, source, count=1)
+        return source.rstrip("\r\n") + newline + line + newline
+
+    text = set_value(text, "Sound_MusicVolume", f"{music_volume:.2f}")
+    text = set_value(text, "Sound_AmbienceVolume", f"{ambience_volume:.2f}")
+    text = set_value(text, "Sound_EnableMusic", "1")
+    temporary = config.with_name(config.name + ".login-audio.tmp")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(bom + text.encode(encoding))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, config)
+    except Exception as exc:
+        temporary.unlink(missing_ok=True)
+        raise LoginBackgroundError(
+            f"No se pudo actualizar el volumen del cliente. Detalle: {exc}"
+        ) from exc
+    return backup
+
+
+def restore_login_sound_volumes(game_root: Path | str) -> Path:
+    config = Path(game_root).resolve() / "WTF" / "Config.wtf"
+    backup = config.with_name(config.name + SOUND_CONFIG_BACKUP_SUFFIX)
+    if not backup.is_file():
+        raise LoginBackgroundError(f"No existe la copia de audio: {backup}")
+    temporary = config.with_name(config.name + ".audio-restore.tmp")
+    try:
+        shutil.copy2(backup, temporary)
+        os.replace(temporary, config)
+    except Exception as exc:
+        temporary.unlink(missing_ok=True)
+        raise LoginBackgroundError(
+            f"No se pudo restaurar la configuración de audio. Detalle: {exc}"
         ) from exc
     return backup
 
