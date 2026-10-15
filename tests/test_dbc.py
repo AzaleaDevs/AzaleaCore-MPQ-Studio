@@ -49,6 +49,25 @@ class DBCReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(DBCError, "tamaño de registro"):
             parse_dbc(payload)
 
+    def test_replaces_numeric_value_and_serializes(self) -> None:
+        original = parse_dbc(build_dbc([(7, 1)], b"\0Hola\0"))
+
+        modified = original.replace_value(0, 0, 99)
+        reopened = parse_dbc(modified.to_bytes())
+
+        self.assertEqual(original.record(0), (7, 1))
+        self.assertEqual(reopened.record(0), (99, 1))
+
+    def test_replaces_field_with_new_string(self) -> None:
+        original = parse_dbc(build_dbc([(7, 1)], b"\0Hola\0"))
+
+        modified = original.replace_with_string(0, 1, "Azeroth")
+        reopened = parse_dbc(modified.to_bytes())
+
+        new_offset = reopened.record(0)[1]
+        self.assertEqual(reopened.string_at(new_offset), "Azeroth")
+        self.assertEqual(reopened.header.string_block_size, len(b"\0Hola\0Azeroth\0"))
+
 
 if __name__ == "__main__":
     unittest.main()

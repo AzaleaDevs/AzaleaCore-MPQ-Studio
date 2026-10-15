@@ -95,6 +95,8 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
     Brillo `200 %`; color efectivo mostrado por Studio: `#FFFFFF`.
   - Resultado visual: botón azul eléctrico/violeta oscuro con bordes magenta y
     texto blanco; captura aportada por el usuario.
+- [x] 61. Hacer autónomo el visor DBC: selector de patch, listado de DBC,
+  edición de valores/textos y exportación automática a `empaquetar`.
 
 ## Regla de cierre para cada tarea
 

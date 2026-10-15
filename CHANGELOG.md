@@ -1,5 +1,15 @@
 # Registro de versiones
 
+## 0.25.0 — 2026-10-15
+
+### Módulo DBC autónomo
+
+- El visor permite escoger y abrir un patch MPQ sin pasar por **EXPORTAR**.
+- Lista todos los DBC identificados dentro del patch y los abre con doble clic.
+- Las celdas aceptan valores `uint32` o texto mediante doble clic.
+- Cada edición se exporta automáticamente a la carpeta `empaquetar`, conservando
+  la ruta interna y manteniendo el MPQ original en solo lectura.
+
 ## 0.24.0 — 2026-10-15
 
 ### Visor DBC

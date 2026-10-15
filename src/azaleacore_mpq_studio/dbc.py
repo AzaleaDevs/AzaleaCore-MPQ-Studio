@@ -66,6 +66,50 @@ class DBCFile:
             return f'{value} · "{escaped}"'
         return str(value)
 
+    def replace_value(self, record_index: int, field_index: int, value: int) -> "DBCFile":
+        """Devuelve una copia con un uint32 sustituido."""
+        if not 0 <= record_index < self.header.record_count:
+            raise IndexError(record_index)
+        if not 0 <= field_index < self.header.field_count:
+            raise IndexError(field_index)
+        if not 0 <= value <= 0xFFFFFFFF:
+            raise ValueError("El valor debe estar entre 0 y 4294967295.")
+        records = bytearray(self.records)
+        offset = record_index * self.header.record_size + field_index * 4
+        struct.pack_into("<I", records, offset, value)
+        return DBCFile(self.header, bytes(records), self.strings)
+
+    def replace_with_string(
+        self, record_index: int, field_index: int, text: str
+    ) -> "DBCFile":
+        """Añade texto al bloque de cadenas y actualiza el offset del campo."""
+        if not text:
+            return self.replace_value(record_index, field_index, 0)
+        encoded = text.encode("utf-8")
+        if b"\0" in encoded:
+            raise ValueError("El texto no puede contener caracteres nulos.")
+        offset = len(self.strings)
+        strings = self.strings + encoded + b"\0"
+        updated = self.replace_value(record_index, field_index, offset)
+        header = DBCHeader(
+            updated.header.record_count,
+            updated.header.field_count,
+            updated.header.record_size,
+            len(strings),
+        )
+        return DBCFile(header, updated.records, strings)
+
+    def to_bytes(self) -> bytes:
+        """Serializa la tabla conservando el formato WDBC clásico."""
+        return struct.pack(
+            "<4s4I",
+            DBC_MAGIC,
+            self.header.record_count,
+            self.header.field_count,
+            self.header.record_size,
+            len(self.strings),
+        ) + self.records + self.strings
+
     @property
     def page_count(self) -> int:
         return max(1, math.ceil(self.header.record_count / 250))

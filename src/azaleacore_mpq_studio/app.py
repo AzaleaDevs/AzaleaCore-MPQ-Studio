@@ -9,8 +9,8 @@ import struct
 import sys
 import tkinter as tk
 from dataclasses import dataclass
-from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from pathlib import Path, PureWindowsPath
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from PIL import Image, ImageTk
 
@@ -320,13 +320,18 @@ class MPQStudioApp:
         self.property_packed_size = tk.StringVar(value="—")
         self.property_flags = self._localized_var("—")
         self.property_sha256 = self._localized_var("—")
+        self.dbc_archive_path = tk.StringVar()
+        self.dbc_archive_status = self._localized_var("Selecciona un patch MPQ.")
         self.dbc_source_text = self._localized_var("Ningún DBC cargado.")
         self.dbc_summary_text = self._localized_var(
-            "Abre un DBC local o selecciónalo en la pestaña EXPORTAR."
+            "Escoge un patch y abre uno de sus archivos DBC."
         )
         self.dbc_page_text = tk.StringVar(value="—")
         self.dbc_document: DBCFile | None = None
         self.dbc_page = 0
+        self.dbc_archive: Path | None = None
+        self.dbc_internal_path: str | None = None
+        self.dbc_file_items: dict[str, MPQFile] = {}
 
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
@@ -1204,35 +1209,67 @@ class MPQStudioApp:
         self.login_apply_button.pack(side=tk.RIGHT)
 
     def _build_dbc_tab(self) -> None:
-        source = ttk.LabelFrame(self.dbc_tab, text="Origen DBC", padding=8)
-        source.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(source, textvariable=self.dbc_source_text).pack(
-            side=tk.LEFT, fill=tk.X, expand=True
+        archive_bar = ttk.LabelFrame(self.dbc_tab, text="Patch MPQ", padding=8)
+        archive_bar.pack(fill=tk.X, pady=(0, 8))
+        archive_controls = ttk.Frame(archive_bar)
+        archive_controls.pack(fill=tk.X)
+        ttk.Label(archive_controls, text="Archivo MPQ:").pack(side=tk.LEFT, padx=(0, 6))
+        self.dbc_archive_combo = ttk.Combobox(
+            archive_controls,
+            textvariable=self.dbc_archive_path,
+            state="normal",
+            width=72,
         )
+        self.dbc_archive_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.dbc_archive_combo.bind("<Return>", lambda _event: self.open_dbc_archive())
         ttk.Button(
-            source,
-            text="Abrir DBC...",
+            archive_controls, text="Examinar...", command=self.browse_dbc_archive
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(
+            archive_controls, text="Abrir patch", command=self.open_dbc_archive
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(
+            archive_controls,
+            text="DBC suelto...",
             command=self.open_local_dbc,
-        ).pack(side=tk.RIGHT)
-        ttk.Button(
-            source,
-            text="Cargar selección del MPQ",
-            command=self.open_selected_dbc,
-        ).pack(side=tk.RIGHT, padx=(0, 8))
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(
+            archive_bar, textvariable=self.dbc_archive_status, style="Muted.TLabel"
+        ).pack(anchor=tk.W, fill=tk.X, pady=(6, 0))
 
-        summary = ttk.LabelFrame(self.dbc_tab, text="Cabecera WDBC", padding=8)
+        panes = ttk.Panedwindow(self.dbc_tab, orient=tk.HORIZONTAL)
+        panes.pack(fill=tk.BOTH, expand=True)
+        dbc_files_panel = ttk.LabelFrame(panes, text="DBC del patch", padding=6)
+        viewer = ttk.Frame(panes)
+        panes.add(dbc_files_panel, weight=1)
+        panes.add(viewer, weight=5)
+
+        self.dbc_file_tree = self._make_tree(dbc_files_panel, ("size",))
+        self.dbc_file_tree.heading("#0", text="Ruta interna")
+        self.dbc_file_tree.heading("size", text="Tamaño")
+        self.dbc_file_tree.column("#0", width=270, minwidth=180)
+        self.dbc_file_tree.column("size", width=85, anchor=tk.E, stretch=False)
+        self.dbc_file_tree.bind("<Double-1>", lambda _event: self.open_dbc_from_patch())
+        ttk.Button(
+            dbc_files_panel,
+            text="Abrir DBC seleccionado",
+            command=self.open_dbc_from_patch,
+        ).pack(fill=tk.X, pady=(6, 0))
+
+        summary = ttk.LabelFrame(viewer, text="Cabecera WDBC", padding=8)
         summary.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(summary, textvariable=self.dbc_source_text).pack(anchor=tk.W)
         ttk.Label(summary, textvariable=self.dbc_summary_text).pack(anchor=tk.W)
         ttk.Label(
             summary,
             text=(
                 "Los campos se muestran como uint32; los offsets válidos del bloque "
-                "de cadenas incluyen también el texto detectado."
+                "de cadenas incluyen el texto. Haz doble clic en una celda para editarla."
             ),
             style="Muted.TLabel",
         ).pack(anchor=tk.W, pady=(3, 0))
 
-        table = ttk.LabelFrame(self.dbc_tab, text="Registros", padding=6)
+        table = ttk.LabelFrame(viewer, text="Registros", padding=6)
         table.pack(fill=tk.BOTH, expand=True)
         self.dbc_tree = ttk.Treeview(
             table,
@@ -1250,13 +1287,14 @@ class MPQStudioApp:
         self.dbc_tree.configure(
             yscrollcommand=dbc_y_scroll.set, xscrollcommand=dbc_x_scroll.set
         )
+        self.dbc_tree.bind("<Double-1>", self._edit_dbc_cell)
         self.dbc_tree.grid(row=0, column=0, sticky=tk.NSEW)
         dbc_y_scroll.grid(row=0, column=1, sticky=tk.NS)
         dbc_x_scroll.grid(row=1, column=0, sticky=tk.EW)
         table.rowconfigure(0, weight=1)
         table.columnconfigure(0, weight=1)
 
-        footer = ttk.Frame(self.dbc_tab)
+        footer = ttk.Frame(viewer)
         footer.pack(fill=tk.X, pady=(8, 0))
         ttk.Label(footer, textvariable=self.dbc_page_text).pack(side=tk.LEFT)
         self.dbc_next_button = ttk.Button(
@@ -1268,6 +1306,82 @@ class MPQStudioApp:
         )
         self.dbc_previous_button.pack(side=tk.RIGHT, padx=(0, 8))
         self._render_dbc_page()
+
+    def refresh_dbc_archive_list(self) -> None:
+        if not hasattr(self, "dbc_archive_combo"):
+            return
+        values = [str(path) for path in discover_mpqs(DEFAULT_DATA_DIR)]
+        current = self.dbc_archive_path.get().strip()
+        if current and current not in values and Path(current).is_file():
+            values.insert(0, current)
+        self.dbc_archive_combo["values"] = values
+        if not current and values:
+            preferred = str(DEFAULT_DATA_DIR / "patch-9.MPQ")
+            self.dbc_archive_path.set(preferred if preferred in values else values[0])
+
+    def browse_dbc_archive(self) -> None:
+        filename = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._tr("Seleccionar patch MPQ"),
+            initialdir=str(DEFAULT_DATA_DIR if DEFAULT_DATA_DIR.is_dir() else Path.cwd()),
+            filetypes=((self._tr("Archivos MPQ"), "*.MPQ *.mpq"), (self._tr("Todos"), "*.*")),
+        )
+        if filename:
+            self.dbc_archive_path.set(filename)
+            self.refresh_dbc_archive_list()
+            self.open_dbc_archive()
+
+    def open_dbc_archive(self) -> None:
+        path = Path(self.dbc_archive_path.get().strip())
+        self._clear_tree(self.dbc_file_tree)
+        self.dbc_file_items.clear()
+        self._clear_dbc_document()
+        try:
+            with MPQArchive(path) as archive:
+                inventory = archive.inventory(known_paths())
+        except (OSError, MPQError, struct.error) as exc:
+            self.dbc_archive_status.set("No se pudo abrir el patch.")
+            self._show_error("Error al abrir MPQ", str(exc))
+            return
+        dbc_files = tuple(
+            item for item in inventory.files if item.path.casefold().endswith(".dbc")
+        )
+        self.dbc_archive = path
+        for item in dbc_files:
+            node = self.dbc_file_tree.insert(
+                "", tk.END, text=item.path, values=(format_bytes(item.size),)
+            )
+            self.dbc_file_items[node] = item
+        self.dbc_archive_status.set(
+            f"{path.name} · {len(dbc_files)} DBC identificados · Solo lectura"
+        )
+
+    def open_dbc_from_patch(self) -> None:
+        selection = self.dbc_file_tree.selection()
+        item = self.dbc_file_items.get(selection[0]) if len(selection) == 1 else None
+        if item is None:
+            self._show_error(
+                "Selecciona un archivo DBC",
+                "Elige un DBC de la lista del patch y vuelve a intentarlo.",
+                warning=True,
+            )
+            return
+        if self.dbc_archive is None:
+            return
+        try:
+            with MPQArchive(self.dbc_archive) as archive:
+                payload = archive.read_file(item.path)
+        except (OSError, MPQError, struct.error) as exc:
+            self._show_error("No se pudo abrir el DBC", str(exc))
+            return
+        if payload is None:
+            self._show_error("No se pudo abrir el DBC", f"Archivo no encontrado: {item.path}")
+            return
+        self._load_dbc(
+            payload,
+            f"{self.dbc_archive.name} · {item.path}",
+            item.path,
+        )
 
     def open_local_dbc(self) -> None:
         filename = filedialog.askopenfilename(
@@ -1284,38 +1398,16 @@ class MPQStudioApp:
         except OSError as exc:
             self._show_error("No se pudo abrir el DBC", str(exc))
             return
-        self._load_dbc(payload, str(source))
+        self._load_dbc(payload, str(source), f"DBFilesClient\\{source.name}")
 
-    def open_selected_dbc(self) -> None:
-        selection = self.archive_tree.selection()
-        item = self.archive_items.get(selection[0]) if len(selection) == 1 else None
-        if item is None or not item.path.casefold().endswith(".dbc"):
-            self._show_error(
-                "Selecciona un archivo DBC",
-                "Elige un archivo .dbc en la pestaña EXPORTAR y vuelve a intentarlo.",
-                warning=True,
-            )
-            return
-        if self.current_archive is None:
-            return
-        try:
-            with MPQArchive(self.current_archive) as archive:
-                payload = archive.read_file(item.path)
-        except (OSError, MPQError, struct.error) as exc:
-            self._show_error("No se pudo abrir el DBC", str(exc))
-            return
-        if payload is None:
-            self._show_error("No se pudo abrir el DBC", f"Archivo no encontrado: {item.path}")
-            return
-        self._load_dbc(payload, f"{self.current_archive.name} · {item.path}")
-
-    def _load_dbc(self, payload: bytes, source: str) -> None:
+    def _load_dbc(self, payload: bytes, source: str, internal_path: str) -> None:
         try:
             document = parse_dbc(payload)
         except (DBCError, struct.error) as exc:
             self._show_error("DBC no válido", str(exc))
             return
         self.dbc_document = document
+        self.dbc_internal_path = internal_path
         self.dbc_page = 0
         self.dbc_source_text.set(source)
         header = document.header
@@ -1326,6 +1418,96 @@ class MPQStudioApp:
         )
         self._render_dbc_page()
         self.notebook.select(self.dbc_tab)
+
+    def _clear_dbc_document(self) -> None:
+        self.dbc_document = None
+        self.dbc_internal_path = None
+        self.dbc_page = 0
+        self.dbc_source_text.set("Ningún DBC cargado.")
+        self.dbc_summary_text.set("Escoge un patch y abre uno de sus archivos DBC.")
+        self._render_dbc_page()
+
+    def _edit_dbc_cell(self, event: tk.Event) -> None:
+        document = self.dbc_document
+        row = self.dbc_tree.identify_row(event.y)
+        column_id = self.dbc_tree.identify_column(event.x)
+        if document is None or not row or not column_id.startswith("#"):
+            return
+        field_index = int(column_id[1:]) - 2
+        if field_index < 0 or field_index >= document.header.field_count:
+            return
+        record_index = int(self.dbc_tree.set(row, "record"))
+        if self.workspace is None:
+            self.choose_workspace()
+            if self.workspace is None:
+                return
+        raw_value = document.record(record_index)[field_index]
+        current_text = document.string_at(raw_value)
+        initial = f"texto:{current_text}" if current_text is not None else str(raw_value)
+        answer = simpledialog.askstring(
+            self._tr("Editar campo DBC"),
+            self._tr(
+                "Escribe un uint32 decimal/hexadecimal o usa texto:contenido. "
+                "El cambio se exportará automáticamente a empaquetar."
+            ),
+            initialvalue=initial,
+            parent=self.root,
+        )
+        if answer is None:
+            return
+        try:
+            if answer.casefold().startswith("texto:"):
+                modified = document.replace_with_string(
+                    record_index, field_index, answer[6:]
+                )
+            else:
+                try:
+                    value = int(answer.strip(), 0)
+                except ValueError:
+                    value = int(answer.strip(), 10)
+                modified = document.replace_value(record_index, field_index, value)
+        except (ValueError, UnicodeError) as exc:
+            self._show_error("Valor DBC no válido", str(exc), warning=True)
+            return
+        if not self._export_modified_dbc(modified):
+            return
+        self.dbc_document = modified
+        self._update_dbc_summary()
+        self._render_dbc_page()
+
+    def _export_modified_dbc(self, document: DBCFile) -> bool:
+        if self.workspace is None or self.dbc_internal_path is None:
+            return False
+        internal_path = PureWindowsPath(self.dbc_internal_path)
+        parts = internal_path.parts
+        if (
+            internal_path.is_absolute()
+            or internal_path.drive
+            or not parts
+            or any(part in {"", ".", ".."} for part in parts)
+        ):
+            self._show_error("Ruta DBC no válida", self.dbc_internal_path)
+            return False
+        destination = self.workspace.package_dir.joinpath(*parts)
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(document.to_bytes())
+        except OSError as exc:
+            self._show_error("No se pudo exportar el DBC", str(exc))
+            return False
+        self.dbc_archive_status.set(f"Cambio exportado: {destination}")
+        self.refresh_package_tree()
+        return True
+
+    def _update_dbc_summary(self) -> None:
+        if self.dbc_document is None:
+            return
+        header = self.dbc_document.header
+        self.dbc_summary_text.set(
+            f"{header.record_count} registros · {header.field_count} campos · "
+            f"{header.record_size} bytes/registro · bloque de cadenas: "
+            f"{header.string_block_size} bytes"
+        )
 
     def _change_dbc_page(self, offset: int) -> None:
         if self.dbc_document is None:
@@ -1894,6 +2076,7 @@ class MPQStudioApp:
         if not current and values:
             preferred = str(DEFAULT_DATA_DIR / "patch-9.MPQ")
             self.selected_path.set(preferred if preferred in values else values[0])
+        self.refresh_dbc_archive_list()
 
     def browse_archive(self) -> None:
         filename = filedialog.askopenfilename(
