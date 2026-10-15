@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.22.1 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.23.0 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
@@ -47,10 +47,10 @@ deslizadores **Música** y **Ambiente** actualizan por separado
 siguiente inicio del cliente.
 
 El editor **Colores de los botones** permite elegir por separado el tinte del
-fondo y el color del texto mediante RGB, saturación y brillo, con vista previa
-en vivo. El fondo se aplica como tinte multiplicativo sobre la textura original,
-por lo que mantiene sus bordes, luces y relieve y puede variar ligeramente
-respecto a la muestra plana. Studio detecta los colores instalados; al desmarcar
+fondo y el color del texto mediante RGB, saturación y brillo. Sus controles se
+agrupan en una cuadrícula compacta de dos columnas. La vista previa carga la
+textura real del botón desde los MPQ detectados y reproduce el tinte
+multiplicativo de WoW, incluyendo sus bordes, luces y relieve. Studio detecta los colores instalados; al desmarcar
 **Usar colores personalizados** elimina su bloque y recupera los colores de las
 plantillas originales.
 

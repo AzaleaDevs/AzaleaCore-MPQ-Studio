@@ -1,5 +1,19 @@
 # Registro de versiones
 
+## 0.23.0 — 2026-10-15
+
+### Vista previa de colores
+
+- La muestra plana se sustituye por un botón completo que combina fondo y texto.
+- La previsualización carga la textura BLP real del cliente detectado y reproduce
+  la multiplicación de color que realiza `SetVertexColor`.
+- Si todavía no hay un cliente disponible, se usa una textura azul de respaldo
+  con el mismo tamaño y un comportamiento visual equivalente.
+- Los diez controles de fondo y texto se reorganizan en una cuadrícula compacta
+  de dos columnas, con deslizadores de longitud reducida.
+- Pruebas automáticas para la multiplicación RGB, conservación del alfa y
+  dimensiones de la textura de respaldo.
+
 ## 0.22.1 — 2026-10-14
 
 ### Corrección de seguridad

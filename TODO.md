@@ -81,6 +81,21 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [x] 56. Permitir centrar el logo principal de WoW encima del formulario.
 - [x] 57. Convertir e instalar un logo personalizado mediante el parche global.
 
+## Completado el 2026-10-15 — colores del login
+
+- [x] 58. Revisar la diferencia entre la previsualización plana y el resultado
+  dentro del cliente: el tinte del botón se multiplica por la textura azul
+  original y `#CE00FF` termina viéndose azul/violeta oscuro.
+- [x] 59. Valorar una previsualización más fiel que use la textura real del botón,
+  además de presets y/o compensación del color multiplicativo.
+- [x] 60. Reproducir y documentar esta combinación probada el 2026-10-14:
+  - Fondo del botón: R `206`, G `0`, B `255`, Saturación `152 %`,
+    Brillo `100 %`; color efectivo mostrado por Studio: `#CE00FF`.
+  - Texto del botón: R `83`, G `128`, B `230`, Saturación `0 %`,
+    Brillo `200 %`; color efectivo mostrado por Studio: `#FFFFFF`.
+  - Resultado visual: botón azul eléctrico/violeta oscuro con bordes magenta y
+    texto blanco; captura aportada por el usuario.
+
 ## Regla de cierre para cada tarea
 
 1. Implementar sólo el alcance numerado.

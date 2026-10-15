@@ -12,8 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from PIL import Image, ImageTk
+
 from . import __version__
 from .blp import BLPConversionError, prepare_login_logo
+from .button_preview import (
+    fallback_button_texture,
+    load_button_texture_from_client,
+    tint_button_texture,
+)
 from .catalog import known_paths
 from .i18n import normalize_language, translate_text
 from .login_background import (
@@ -80,6 +87,7 @@ from .workspace import ExportRequest, Workspace, export_files, prepare_workspace
 DEFAULT_DATA_DIR = Path(r"D:\World of Warcraft 3.3.5a\Data")
 APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 APP_ICON_PATH = APP_ROOT / "assets" / "azaleacore-mpq-studio.ico"
+APP_ICON_PNG_PATH = APP_ROOT / "assets" / "emotetails-youtube-logo.png"
 WINDOWS_APP_USER_MODEL_ID = "AzaleaDevs.AzaleaCoreMPQStudio"
 
 
@@ -241,11 +249,11 @@ class MPQStudioApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("AzaleaCore MPQ Studio")
-        if APP_ICON_PATH.is_file():
-            try:
-                self.root.iconbitmap(str(APP_ICON_PATH))
-            except tk.TclError:
-                pass
+        self.window_icon_photo: ImageTk.PhotoImage | None = None
+        self._native_icon_handles: list[int] = []
+        self._apply_window_icon()
+        self.root.after(250, self._apply_window_icon)
+        self.root.after(1000, self._apply_window_icon)
         self.root.geometry("1180x900")
         self.root.minsize(900, 560)
 
@@ -290,8 +298,10 @@ class MPQStudioApp:
         self.text_color_saturation = tk.DoubleVar(value=100)
         self.text_color_brightness = tk.DoubleVar(value=100)
         self.color_value_texts: dict[str, tk.StringVar] = {}
+        self.color_preview_caption = tk.StringVar()
         self.button_color_preview: tk.Label | None = None
-        self.text_color_preview: tk.Label | None = None
+        self.button_preview_texture = fallback_button_texture()
+        self.button_preview_photo: ImageTk.PhotoImage | None = None
         self.login_status = self._localized_var(
             "Selecciona la carpeta del cliente y pulsa Detectar."
         )
@@ -333,6 +343,71 @@ class MPQStudioApp:
         self._update_actions()
         if self.selected_path.get():
             self.root.after_idle(self.open_selected)
+
+    def _apply_window_icon(self) -> None:
+        """Aplica el icono tanto a Tk como a la ventana nativa de Windows."""
+        try:
+            if APP_ICON_PATH.is_file():
+                self.root.iconbitmap(default=str(APP_ICON_PATH))
+            if APP_ICON_PNG_PATH.is_file():
+                with Image.open(APP_ICON_PNG_PATH) as source:
+                    icon = source.convert("RGBA")
+                    icon.thumbnail((256, 256), Image.Resampling.LANCZOS)
+                    self.window_icon_photo = ImageTk.PhotoImage(icon)
+                self.root.iconphoto(True, self.window_icon_photo)
+        except (OSError, tk.TclError):
+            pass
+
+        if sys.platform != "win32" or not APP_ICON_PATH.is_file():
+            return
+
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            find_window = user32.FindWindowW
+            find_window.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p)
+            find_window.restype = ctypes.c_void_p
+            hwnd = find_window(None, self.root.title())
+            if not hwnd:
+                return
+
+            # La barra de tareas consulta los iconos WM_ICON_SMALL y WM_ICON_BIG.
+            # Si no existen, Windows muestra el icono genérico de pythonw/Tk.
+            load_image = user32.LoadImageW
+            load_image.argtypes = (
+                ctypes.c_void_p,
+                ctypes.c_wchar_p,
+                ctypes.c_uint,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint,
+            )
+            load_image.restype = ctypes.c_void_p
+            send_message = user32.SendMessageW
+            send_message.argtypes = (
+                ctypes.c_void_p,
+                ctypes.c_uint,
+                ctypes.c_size_t,
+                ctypes.c_void_p,
+            )
+            send_message.restype = ctypes.c_void_p
+
+            self._native_icon_handles = []
+            for icon_type, size in ((0, 16), (1, 32)):
+                handle = load_image(
+                    None,
+                    str(APP_ICON_PATH),
+                    1,
+                    size,
+                    size,
+                    0x0010,
+                )
+                if handle:
+                    send_message(hwnd, 0x0080, icon_type, handle)
+                    self._native_icon_handles.append(handle)
+        except OSError:
+            pass
 
     def _tr(self, text: str) -> str:
         return translate_text(text, self.language)
@@ -786,6 +861,9 @@ class MPQStudioApp:
         text = self._effective_login_color("text")
         button_hex = self._color_hex(button)
         text_hex = self._color_hex(text)
+        self.color_preview_caption.set(
+            f"{self._tr('Fondo')} {button_hex} · {self._tr('Texto')} {text_hex}"
+        )
         for prefix, variables in (
             ("button", self._color_variables("button")),
             ("text", self._color_variables("text")),
@@ -797,17 +875,22 @@ class MPQStudioApp:
                 if label is not None:
                     label.set(str(round(variable.get())))
         if self.button_color_preview is not None:
+            rendered = tint_button_texture(self.button_preview_texture, button)
+            rendered = rendered.resize((192, 48), Image.Resampling.LANCZOS)
+            self.button_preview_photo = ImageTk.PhotoImage(rendered)
             self.button_color_preview.configure(
-                text=f"Botón {button_hex}",
-                background=button_hex,
+                text=self._tr("Iniciar sesión"),
+                image=self.button_preview_photo,
+                compound=tk.CENTER,
+                background="#10141C",
                 foreground=text_hex,
             )
-        if self.text_color_preview is not None:
-            self.text_color_preview.configure(
-                text=f"Texto {text_hex}",
-                background="#202020",
-                foreground=text_hex,
-            )
+
+    def _refresh_button_preview_texture(self) -> None:
+        root = Path(self.login_game_root.get().strip() or ".")
+        texture = load_button_texture_from_client(root)
+        self.button_preview_texture = texture or fallback_button_texture()
+        self._update_color_previews()
 
     def _set_color_controls(
         self, prefix: str, color: tuple[float, float, float]
@@ -818,52 +901,52 @@ class MPQStudioApp:
         variables[3].set(100)
         variables[4].set(100)
 
-    def _build_color_editor(
-        self, parent: ttk.Frame, title: str, prefix: str
-    ) -> None:
-        panel = ttk.LabelFrame(parent, text=title, padding=8)
-        panel.pack(
-            side=tk.LEFT,
-            fill=tk.BOTH,
-            expand=True,
-            padx=(0, 5) if prefix == "button" else (5, 0),
+    def _build_color_control_grid(self, parent: ttk.Frame) -> None:
+        panel = ttk.LabelFrame(parent, text="Ajustes", padding=6)
+        panel.grid(row=0, column=1, sticky=tk.NSEW)
+        ttk.Label(panel, text="").grid(row=0, column=0)
+        ttk.Label(panel, text="Fondo", anchor=tk.CENTER).grid(
+            row=0, column=1, sticky=tk.EW, padx=(4, 7)
         )
-        preview = tk.Label(
-            panel,
-            text="",
-            relief=tk.SUNKEN,
-            height=2,
-            font=("Segoe UI", 10, "bold"),
+        ttk.Label(panel, text="Texto", anchor=tk.CENTER).grid(
+            row=0, column=2, sticky=tk.EW, padx=(7, 4)
         )
-        preview.grid(row=0, column=0, columnspan=3, sticky=tk.EW, pady=(0, 5))
-        if prefix == "button":
-            self.button_color_preview = preview
-        else:
-            self.text_color_preview = preview
-
-        variables = self._color_variables(prefix)
         rows = (
-            ("R", "r", variables[0], 255),
-            ("G", "g", variables[1], 255),
-            ("B", "b", variables[2], 255),
-            ("Saturación", "saturation", variables[3], 200),
-            ("Brillo", "brightness", variables[4], 200),
+            ("R", "r", 0, 255),
+            ("G", "g", 1, 255),
+            ("B", "b", 2, 255),
+            ("Saturación", "saturation", 3, 200),
+            ("Brillo", "brightness", 4, 200),
         )
-        for row, (label, key, variable, maximum) in enumerate(rows, start=1):
-            ttk.Label(panel, text=label, width=10).grid(row=row, column=0, sticky=tk.W)
-            ttk.Scale(
-                panel,
-                from_=0,
-                to=maximum,
-                variable=variable,
-                command=self._update_color_previews,
-            ).grid(row=row, column=1, sticky=tk.EW, padx=6)
-            value_text = tk.StringVar(value=str(round(variable.get())))
-            self.color_value_texts[f"{prefix}_{key}"] = value_text
-            ttk.Label(panel, textvariable=value_text, width=4).grid(
-                row=row, column=2, sticky=tk.E
+        for row, (label, key, variable_index, maximum) in enumerate(rows, start=1):
+            ttk.Label(panel, text=label).grid(
+                row=row, column=0, sticky=tk.W, padx=(0, 5), pady=1
             )
+            for column, prefix in enumerate(("button", "text"), start=1):
+                variable = self._color_variables(prefix)[variable_index]
+                control = ttk.Frame(panel)
+                control.grid(
+                    row=row,
+                    column=column,
+                    sticky=tk.EW,
+                    padx=(4, 7) if prefix == "button" else (7, 4),
+                    pady=1,
+                )
+                ttk.Scale(
+                    control,
+                    from_=0,
+                    to=maximum,
+                    variable=variable,
+                    command=self._update_color_previews,
+                    length=84,
+                ).pack(side=tk.LEFT)
+                value_text = tk.StringVar(value=str(round(variable.get())))
+                self.color_value_texts[f"{prefix}_{key}"] = value_text
+                ttk.Label(control, textvariable=value_text, width=3, anchor=tk.E).pack(
+                    side=tk.LEFT, padx=(4, 0)
+                )
         panel.columnconfigure(1, weight=1)
+        panel.columnconfigure(2, weight=1)
 
     def _build_login_tab(self) -> None:
         canvas = tk.Canvas(self.login_tab, highlightthickness=0)
@@ -1015,16 +1098,33 @@ class MPQStudioApp:
         ttk.Label(
             colors,
             text=(
-                "RGB define el tono base; Saturación y Brillo ajustan el resultado "
-                "que aparece en la vista previa."
+                "RGB define el tono base; la vista previa multiplica el color "
+                "sobre la textura real del cliente."
             ),
             style="Muted.TLabel",
         ).pack(anchor=tk.W, pady=(2, 6))
         color_editors = ttk.Frame(colors)
-        color_editors.pack(fill=tk.X)
-        self._build_color_editor(color_editors, "Fondo del botón", "button")
-        self._build_color_editor(color_editors, "Texto del botón", "text")
-        self._update_color_previews()
+        color_editors.pack(anchor=tk.W)
+        preview_panel = ttk.LabelFrame(
+            color_editors, text="Vista previa real", padding=8
+        )
+        preview_panel.grid(row=0, column=0, sticky=tk.NS, padx=(0, 8))
+        self.button_color_preview = tk.Label(
+            preview_panel,
+            text="",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground="#3B4659",
+            font=("Georgia", 11, "bold"),
+        )
+        self.button_color_preview.pack(padx=4, pady=(4, 2))
+        ttk.Label(
+            preview_panel,
+            textvariable=self.color_preview_caption,
+            style="Muted.TLabel",
+        ).pack(pady=(0, 3))
+        self._build_color_control_grid(color_editors)
+        self._refresh_button_preview_texture()
 
         logos = ttk.LabelFrame(content, text="Elementos de marca", padding=10)
         logos.pack(fill=tk.X, pady=(0, 10))
@@ -1132,6 +1232,7 @@ class MPQStudioApp:
 
     def detect_login_archive(self) -> None:
         root = Path(self.login_game_root.get().strip() or ".")
+        self._refresh_button_preview_texture()
         archives = find_login_archives(root)
         if not archives:
             self.login_archive = None
