@@ -22,6 +22,7 @@ from .button_preview import (
     tint_button_texture,
 )
 from .catalog import known_paths
+from .dbc import DBCError, DBCFile, parse_dbc
 from .i18n import normalize_language, translate_text
 from .login_background import (
     ACCOUNT_LOGIN_PATH,
@@ -89,6 +90,7 @@ APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 APP_ICON_PATH = APP_ROOT / "assets" / "azaleacore-mpq-studio.ico"
 APP_ICON_PNG_PATH = APP_ROOT / "assets" / "emotetails-youtube-logo.png"
 WINDOWS_APP_USER_MODEL_ID = "AzaleaDevs.AzaleaCoreMPQStudio"
+DBC_PAGE_SIZE = 250
 
 
 @dataclass(frozen=True)
@@ -318,6 +320,13 @@ class MPQStudioApp:
         self.property_packed_size = tk.StringVar(value="—")
         self.property_flags = self._localized_var("—")
         self.property_sha256 = self._localized_var("—")
+        self.dbc_source_text = self._localized_var("Ningún DBC cargado.")
+        self.dbc_summary_text = self._localized_var(
+            "Abre un DBC local o selecciónalo en la pestaña EXPORTAR."
+        )
+        self.dbc_page_text = tk.StringVar(value="—")
+        self.dbc_document: DBCFile | None = None
+        self.dbc_page = 0
 
         self.workspace: Workspace | None = None
         self.patch_plan: PatchPlan | None = None
@@ -465,6 +474,8 @@ class MPQStudioApp:
             variable.set(variable.get())
         if self.property_name.get() in {"Sin selección", "No selection"}:
             self.property_name.set(self._tr("Sin selección"))
+        self._update_color_previews()
+        self._render_dbc_page()
 
     def _translate_tree_values(self, tree: ttk.Treeview, item: str) -> None:
         values = tree.item(item, "values")
@@ -530,12 +541,15 @@ class MPQStudioApp:
         self.export_tab = ttk.Frame(notebook, padding=6)
         self.import_tab = ttk.Frame(notebook, padding=6)
         self.login_tab = ttk.Frame(notebook, padding=12)
+        self.dbc_tab = ttk.Frame(notebook, padding=8)
         notebook.add(self.export_tab, text="EXPORTAR")
         notebook.add(self.import_tab, text="IMPORTAR")
         notebook.add(self.login_tab, text="FONDO LOGIN")
+        notebook.add(self.dbc_tab, text="VISOR DBC")
         self._build_export_tab()
         self._build_import_tab()
         self._build_login_tab()
+        self._build_dbc_tab()
         self._bind_shortcuts()
         self.root.after_idle(self.detect_login_archive)
 
@@ -1188,6 +1202,190 @@ class MPQStudioApp:
             state=tk.DISABLED,
         )
         self.login_apply_button.pack(side=tk.RIGHT)
+
+    def _build_dbc_tab(self) -> None:
+        source = ttk.LabelFrame(self.dbc_tab, text="Origen DBC", padding=8)
+        source.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(source, textvariable=self.dbc_source_text).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        ttk.Button(
+            source,
+            text="Abrir DBC...",
+            command=self.open_local_dbc,
+        ).pack(side=tk.RIGHT)
+        ttk.Button(
+            source,
+            text="Cargar selección del MPQ",
+            command=self.open_selected_dbc,
+        ).pack(side=tk.RIGHT, padx=(0, 8))
+
+        summary = ttk.LabelFrame(self.dbc_tab, text="Cabecera WDBC", padding=8)
+        summary.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(summary, textvariable=self.dbc_summary_text).pack(anchor=tk.W)
+        ttk.Label(
+            summary,
+            text=(
+                "Los campos se muestran como uint32; los offsets válidos del bloque "
+                "de cadenas incluyen también el texto detectado."
+            ),
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W, pady=(3, 0))
+
+        table = ttk.LabelFrame(self.dbc_tab, text="Registros", padding=6)
+        table.pack(fill=tk.BOTH, expand=True)
+        self.dbc_tree = ttk.Treeview(
+            table,
+            columns=(),
+            show="headings",
+            selectmode="browse",
+            height=12,
+        )
+        dbc_y_scroll = ttk.Scrollbar(
+            table, orient=tk.VERTICAL, command=self.dbc_tree.yview
+        )
+        dbc_x_scroll = ttk.Scrollbar(
+            table, orient=tk.HORIZONTAL, command=self.dbc_tree.xview
+        )
+        self.dbc_tree.configure(
+            yscrollcommand=dbc_y_scroll.set, xscrollcommand=dbc_x_scroll.set
+        )
+        self.dbc_tree.grid(row=0, column=0, sticky=tk.NSEW)
+        dbc_y_scroll.grid(row=0, column=1, sticky=tk.NS)
+        dbc_x_scroll.grid(row=1, column=0, sticky=tk.EW)
+        table.rowconfigure(0, weight=1)
+        table.columnconfigure(0, weight=1)
+
+        footer = ttk.Frame(self.dbc_tab)
+        footer.pack(fill=tk.X, pady=(8, 0))
+        ttk.Label(footer, textvariable=self.dbc_page_text).pack(side=tk.LEFT)
+        self.dbc_next_button = ttk.Button(
+            footer, text="Siguiente", command=lambda: self._change_dbc_page(1)
+        )
+        self.dbc_next_button.pack(side=tk.RIGHT)
+        self.dbc_previous_button = ttk.Button(
+            footer, text="Anterior", command=lambda: self._change_dbc_page(-1)
+        )
+        self.dbc_previous_button.pack(side=tk.RIGHT, padx=(0, 8))
+        self._render_dbc_page()
+
+    def open_local_dbc(self) -> None:
+        filename = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._tr("Seleccionar archivo DBC"),
+            initialdir=str(DEFAULT_DATA_DIR if DEFAULT_DATA_DIR.is_dir() else Path.cwd()),
+            filetypes=((self._tr("Archivos DBC"), "*.dbc *.DBC"), (self._tr("Todos"), "*.*")),
+        )
+        if not filename:
+            return
+        source = Path(filename)
+        try:
+            payload = source.read_bytes()
+        except OSError as exc:
+            self._show_error("No se pudo abrir el DBC", str(exc))
+            return
+        self._load_dbc(payload, str(source))
+
+    def open_selected_dbc(self) -> None:
+        selection = self.archive_tree.selection()
+        item = self.archive_items.get(selection[0]) if len(selection) == 1 else None
+        if item is None or not item.path.casefold().endswith(".dbc"):
+            self._show_error(
+                "Selecciona un archivo DBC",
+                "Elige un archivo .dbc en la pestaña EXPORTAR y vuelve a intentarlo.",
+                warning=True,
+            )
+            return
+        if self.current_archive is None:
+            return
+        try:
+            with MPQArchive(self.current_archive) as archive:
+                payload = archive.read_file(item.path)
+        except (OSError, MPQError, struct.error) as exc:
+            self._show_error("No se pudo abrir el DBC", str(exc))
+            return
+        if payload is None:
+            self._show_error("No se pudo abrir el DBC", f"Archivo no encontrado: {item.path}")
+            return
+        self._load_dbc(payload, f"{self.current_archive.name} · {item.path}")
+
+    def _load_dbc(self, payload: bytes, source: str) -> None:
+        try:
+            document = parse_dbc(payload)
+        except (DBCError, struct.error) as exc:
+            self._show_error("DBC no válido", str(exc))
+            return
+        self.dbc_document = document
+        self.dbc_page = 0
+        self.dbc_source_text.set(source)
+        header = document.header
+        self.dbc_summary_text.set(
+            f"{header.record_count} registros · {header.field_count} campos · "
+            f"{header.record_size} bytes/registro · bloque de cadenas: "
+            f"{header.string_block_size} bytes"
+        )
+        self._render_dbc_page()
+        self.notebook.select(self.dbc_tab)
+
+    def _change_dbc_page(self, offset: int) -> None:
+        if self.dbc_document is None:
+            return
+        last_page = max(
+            0,
+            (self.dbc_document.header.record_count - 1) // DBC_PAGE_SIZE,
+        )
+        self.dbc_page = min(last_page, max(0, self.dbc_page + offset))
+        self._render_dbc_page()
+
+    def _render_dbc_page(self) -> None:
+        if not hasattr(self, "dbc_tree"):
+            return
+        self._clear_tree(self.dbc_tree)
+        document = self.dbc_document
+        if document is None:
+            self.dbc_tree.configure(columns=())
+            self.dbc_page_text.set(self._tr("Ningún DBC cargado."))
+            self.dbc_previous_button.configure(state=tk.DISABLED)
+            self.dbc_next_button.configure(state=tk.DISABLED)
+            return
+
+        columns = ("record",) + tuple(
+            f"field_{index}" for index in range(document.header.field_count)
+        )
+        self.dbc_tree.configure(columns=columns)
+        self.dbc_tree.heading("record", text="#")
+        self.dbc_tree.column("record", width=72, minwidth=60, stretch=False, anchor=tk.E)
+        for index in range(document.header.field_count):
+            column = f"field_{index}"
+            self.dbc_tree.heading(column, text=f"{self._tr('Campo')} {index}")
+            self.dbc_tree.column(column, width=130, minwidth=80, stretch=False)
+
+        start = self.dbc_page * DBC_PAGE_SIZE
+        stop = min(start + DBC_PAGE_SIZE, document.header.record_count)
+        for record_index in range(start, stop):
+            values = document.record(record_index)
+            self.dbc_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    record_index,
+                    *(document.display_value(value) for value in values),
+                ),
+            )
+        page_count = max(
+            1, (document.header.record_count + DBC_PAGE_SIZE - 1) // DBC_PAGE_SIZE
+        )
+        page_separator = "of" if self.language == "en" else "de"
+        self.dbc_page_text.set(
+            f"{self._tr('Página')} {self.dbc_page + 1} {page_separator} {page_count} · "
+            f"{start}–{max(start, stop - 1)}"
+        )
+        self.dbc_previous_button.configure(
+            state=tk.NORMAL if self.dbc_page > 0 else tk.DISABLED
+        )
+        self.dbc_next_button.configure(
+            state=tk.NORMAL if self.dbc_page + 1 < page_count else tk.DISABLED
+        )
 
     def choose_login_game_root(self) -> None:
         selected = filedialog.askdirectory(

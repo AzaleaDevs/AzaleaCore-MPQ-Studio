@@ -37,7 +37,7 @@ subido a `main`. No se mezclan tareas salvo que una dependencia lo exija.
 - [ ] 24. Vista hexadecimal limitada para formatos desconocidos.
 - [ ] 25. Leer metadatos BLP: versión, dimensiones, compresión y mipmaps.
 - [ ] 26. Mostrar una vista previa visual de imágenes BLP compatibles.
-- [ ] 27. Leer cabeceras DBC y mostrar número de registros/campos.
+- [x] 27. Leer cabeceras DBC, mostrar registros/campos y navegar su contenido.
 - [ ] 28. Añadir exportación del informe de propiedades a JSON.
 
 ## Proyectos, instalación y reversión

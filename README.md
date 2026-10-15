@@ -4,7 +4,7 @@ Aplicación de escritorio para investigar, extraer, validar y crear archivos MPQ
 
 ## Estado
 
-La versión 0.23.0 incluye un lector MPQ de solo lectura, búsqueda instantánea,
+La versión 0.24.0 incluye un lector MPQ de solo lectura, búsqueda instantánea,
 exportación múltiple con
 rutas conservadas y creación validada de parches mínimos. La interfaz puede
 cambiar entre español e inglés con el botón del encabezado y recuerda la
@@ -53,6 +53,11 @@ textura real del botón desde los MPQ detectados y reproduce el tinte
 multiplicativo de WoW, incluyendo sus bordes, luces y relieve. Studio detecta los colores instalados; al desmarcar
 **Usar colores personalizados** elimina su bloque y recupera los colores de las
 plantillas originales.
+
+La cuarta pestaña, **VISOR DBC**, abre tablas WDBC de WoW 3.3.5a desde el disco
+o directamente desde el archivo seleccionado en **EXPORTAR**. Muestra la
+cabecera, todos los campos `uint32`, las cadenas reconocidas y pagina los
+registros para mantener fluida la interfaz incluso con tablas grandes.
 
 El icono de la ventana y la barra de tareas utiliza el logo de YouTube proporcionado para el proyecto.
 El recurso multirresolución y el PNG original están en `assets/`.

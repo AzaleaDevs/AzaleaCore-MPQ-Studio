@@ -1,5 +1,16 @@
 # Registro de versiones
 
+## 0.24.0 — 2026-10-15
+
+### Visor DBC
+
+- Nueva cuarta pestaña **VISOR DBC** para abrir tablas locales o cargarlas
+  directamente desde la selección del MPQ.
+- Validación de la cabecera WDBC, el tamaño de registros y el bloque de cadenas.
+- Tabla horizontal con todos los campos, interpretación de offsets de texto y
+  navegación paginada de 250 registros.
+- Pruebas automáticas para cabeceras, registros, cadenas y archivos inválidos.
+
 ## 0.23.0 — 2026-10-15
 
 ### Vista previa de colores
